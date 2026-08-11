@@ -46,7 +46,7 @@ That's it. The script installs dependencies, sets up Podman (asks first), builds
 - Multiple sessions side by side with editing leases — no more clobbered prompts
 - Reconnect hardening — refresh your browser mid-run and nothing is lost
 - PWA baseline — installable, offline-capable shell
-- Environment profiles — Node, Node+Python, or Universal images with one-click rebuild that preserves your workspace and caches
+- Seamless sandboxes — every workspace comes with its container ready to start (same name, Node+Python by default); one-click rebuild preserves your workspace and caches
 
 ---
 

@@ -67,7 +67,8 @@ export interface CreateWorkspaceInput {
 
 /** Create a SANDBOX container for a workspace. */
 export interface CreateSandboxInput {
-  name: string;
+  /** Sandbox name; defaults to the workspace name. */
+  name?: string;
   /** Optional explicit folder to mount (must be inside the root); default: the workspace folder. */
   hostPath?: string;
   securityProfile?: "standard" | "restricted" | "trusted";
@@ -226,9 +227,10 @@ export class SandboxManager {
     });
     this.options.logger.info({ workspaceId: record.id, hostRootPath }, "workspace created");
 
-    // Auto-create the primary sandbox (the container for this workspace).
+    // Auto-create the primary sandbox (the container for this workspace),
+    // named after the workspace, ready to start.
     const sandbox = await this.createSandbox(record.id, {
-      name: input.kind === "worktree" ? input.name : "main",
+      name: input.name,
       hostPath: input.sandboxHostPath,
       kind: input.kind,
       gitBranch: input.gitBranch,
@@ -274,12 +276,15 @@ export class SandboxManager {
 
     const sandboxId = newId("sbx");
     const containerName = `pi-control-${sandboxId}`;
-    const imageRef = input.imageRef ?? imageForProfile(input.profile ?? "node");
+    // Default environment: node + python. More can be installed later or via
+    // the universal profile on rebuild — no picker needed at creation.
+    const profile = input.profile ?? "python";
+    const imageRef = input.imageRef ?? imageForProfile(profile);
     const capacity = await this.options.runtime.capacity();
     const defaults = defaultResources(capacity);
 
     // Make sure the profile image exists (podman build is layer-cached).
-    await this.ensureProfileImage(input.profile ?? "node");
+    await this.ensureProfileImage(profile);
 
     // Per-sandbox agent secret + loopback-forwarded agent port (ADR-0006).
     const agentToken = crypto.randomBytes(32).toString("hex");
@@ -333,7 +338,7 @@ export class SandboxManager {
       id: sandboxId,
       projectId: workspaceId,
       machineId: workspace.machineId,
-      name: input.name,
+      name: input.name ?? workspace.name,
       hostPath,
       containerWorkspacePath: CONTAINER_WORKSPACE_PATH,
       kind: input.kind ?? "main",

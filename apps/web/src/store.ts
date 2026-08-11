@@ -79,7 +79,7 @@ interface PiControlState {
   createSession(): Promise<void>;
   createWorkspaceSession(workspaceId: string): Promise<void>;
   createWorkspace(name: string, hostRootPath?: string): Promise<void>;
-  createSandbox(name: string, hostPath?: string, profile?: "node" | "python" | "universal"): Promise<void>;
+  createSandbox(name?: string, hostPath?: string): Promise<void>;
   startSandbox(sandboxId: string): Promise<void>;
   stopSandbox(sandboxId: string): Promise<void>;
   removeSandbox(sandboxId: string): Promise<void>;
@@ -153,14 +153,13 @@ export const usePiControl = create<PiControlState>((set, get) => ({
     });
   },
 
-  createSandbox: async (name, hostPath, profile = "node") => {
+  createSandbox: async (name, hostPath) => {
     const workspaceId = get().activeWorkspaceId;
     if (!workspaceId) throw new Error("no active workspace");
     const { sandbox } = await api.createSandbox(workspaceId, {
-      name,
+      ...(name ? { name } : {}),
       ...(hostPath ? { hostPath } : {}),
       securityProfile: "standard",
-      profile,
     });
     set({
       sandboxes: { ...get().sandboxes, [sandbox.id]: sandbox },

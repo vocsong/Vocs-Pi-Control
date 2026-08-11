@@ -74,19 +74,17 @@ function AddWorkspaceForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function AddSandboxForm({ workspaceId, onDone }: { workspaceId: string; onDone: () => void }) {
+function AddSandboxForm({ workspace, onDone }: { workspace: WorkspaceInfo; onDone: () => void }) {
   const createSandbox = usePiControl((s) => s.createSandbox);
-  const [name, setName] = useState("");
-  const [profile, setProfile] = useState("node");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const submit = async () => {
-    if (!name.trim()) return;
     setBusy(true);
     setError(null);
     try {
-      await createSandbox(name.trim(), undefined, profile as "node" | "python" | "universal");
+      // Same name as the workspace; default environment (node + python).
+      await createSandbox(workspace.name);
       onDone();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -97,19 +95,11 @@ function AddSandboxForm({ workspaceId, onDone }: { workspaceId: string; onDone: 
 
   return (
     <div className="inline-form">
-      <input placeholder="Sandbox name (e.g. main)" value={name} onChange={(e) => setName(e.target.value)} />
-      <label className="form-label">
-        Environment
-        <select value={profile} onChange={(e) => setProfile(e.target.value)}>
-          <option value="node">Node</option>
-          <option value="python">Node + Python</option>
-          <option value="universal">Universal (build tools, ffmpeg)</option>
-        </select>
-      </label>
+      <p className="sidebar-empty">Sandbox “{workspace.name}” will be created with the default environment (Node + Python).</p>
       {error && <div className="form-error">{error}</div>}
       <div className="form-actions">
         <button className="btn btn-small" onClick={() => void submit()} disabled={busy}>
-          Add sandbox
+          Create sandbox
         </button>
         <button className="btn btn-small" onClick={onDone}>
           Cancel
@@ -260,7 +250,7 @@ function WorkspaceNode({ workspace }: { workspace: WorkspaceInfo }) {
             const sandbox = sandboxes[id];
             return sandbox ? <SandboxNode key={id} sandbox={sandbox} /> : null;
           })}
-          {adding && <AddSandboxForm workspaceId={workspace.id} onDone={() => setAdding(false)} />}
+          {adding && <AddSandboxForm workspace={workspace} onDone={() => setAdding(false)} />}
         </ul>
       )}
     </li>

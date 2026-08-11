@@ -206,7 +206,7 @@ export const api = {
 
   createSandbox: (
     workspaceId: string,
-    body: { name: string; hostPath?: string; securityProfile?: string; profile?: string; imageRef?: string },
+    body: { name?: string; hostPath?: string; securityProfile?: string; profile?: string; imageRef?: string },
   ) =>
     json<{ sandbox: SandboxInfo }>(`/api/workspaces/${workspaceId}/sandboxes`, {
       method: "POST",
