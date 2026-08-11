@@ -214,6 +214,8 @@ export class AgentClient {
         return;
       case "agent.session.created":
       case "agent.session.list":
+      case "agent.session.info":
+      case "agent.session.models":
       case "agent.file.list":
       case "agent.file.read":
       case "agent.file.ok":

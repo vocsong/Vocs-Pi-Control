@@ -182,6 +182,16 @@ export class AgentManager {
     await this.require(workspaceId).request("agent.session.setThinkingLevel", { sessionId, level }, 10_000);
   }
 
+  async sessionInfo(workspaceId: string, sessionId: string) {
+    const event = await this.require(workspaceId).request("agent.session.info", { sessionId }, 15_000);
+    return (event.payload as { info: unknown }).info;
+  }
+
+  async sessionModels(workspaceId: string) {
+    const event = await this.require(workspaceId).request("agent.session.models", {}, 15_000);
+    return (event.payload as { models: unknown[] }).models;
+  }
+
   async disposeSession(workspaceId: string, sessionId: string): Promise<void> {
     await this.waitForConnection(workspaceId, 3_000).catch(() => undefined);
     await this.require(workspaceId).request("agent.session.dispose", { sessionId }, 10_000);

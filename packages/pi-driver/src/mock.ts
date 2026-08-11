@@ -178,6 +178,24 @@ export class MockPiDriver implements PiSessionDriver {
     };
   }
 
+  async getSessionInfo(sessionId: string) {
+    const session = this.require(sessionId);
+    return {
+      model: session.handle.model,
+      thinkingLevel: session.handle.thinkingLevel,
+      tools: ["read", "bash", "edit", "write"],
+      skills: [],
+      extensions: [],
+      prompts: [],
+      messages: 3,
+      isStreaming: session.running,
+    };
+  }
+
+  async listModels() {
+    return [{ provider: "mock", id: "mock-model" }];
+  }
+
   subscribe(sessionId: string, listener: PiDriverEventListener): () => void {
     const session = this.require(sessionId);
     session.listeners.add(listener);

@@ -81,4 +81,62 @@ export function registerSessionRoutes(
     }
     return { ok: true };
   });
+
+  /* Phase 9 — Pi management controls */
+
+  app.get("/api/sessions/:sessionId/capabilities", async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string };
+    if (!workspaceSessions.owns(sessionId)) {
+      return reply.code(404).send({ error: "not_a_workspace_session" });
+    }
+    try {
+      return { capabilities: await workspaceSessions.capabilities(sessionId) };
+    } catch (error) {
+      return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  app.get("/api/workspaces/:workspaceId/models", async (request, reply) => {
+    const { workspaceId } = request.params as { workspaceId: string };
+    try {
+      return { models: await workspaceSessions.models(workspaceId) };
+    } catch (error) {
+      return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  app.post("/api/sessions/:sessionId/model", async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string };
+    const body = z.object({ model: z.string().min(1).max(300) }).strict().parse(request.body);
+    if (!workspaceSessions.owns(sessionId)) return reply.code(404).send({ error: "not_a_workspace_session" });
+    try {
+      await workspaceSessions.setModel(sessionId, body.model);
+      return { ok: true };
+    } catch (error) {
+      return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  app.post("/api/sessions/:sessionId/thinking", async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string };
+    const body = z.object({ level: z.string().min(1).max(50) }).strict().parse(request.body);
+    if (!workspaceSessions.owns(sessionId)) return reply.code(404).send({ error: "not_a_workspace_session" });
+    try {
+      await workspaceSessions.setThinkingLevel(sessionId, body.level);
+      return { ok: true };
+    } catch (error) {
+      return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  app.post("/api/sessions/:sessionId/compact", async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string };
+    if (!workspaceSessions.owns(sessionId)) return reply.code(404).send({ error: "not_a_workspace_session" });
+    try {
+      await workspaceSessions.compact(sessionId);
+      return { ok: true };
+    } catch (error) {
+      return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
 }

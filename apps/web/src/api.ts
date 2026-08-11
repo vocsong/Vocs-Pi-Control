@@ -148,6 +148,29 @@ export const api = {
   listPorts: (workspaceId: string) =>
     json<Array<{ containerPort: number; url: string }>>(`/api/workspaces/${workspaceId}/ports`),
 
+  sessionCapabilities: (sessionId: string) =>
+    json<{ capabilities: Record<string, unknown> }>(`/api/sessions/${sessionId}/capabilities`),
+
+  listModels: (workspaceId: string) =>
+    json<{ models: Array<{ provider: string; id: string }> }>(`/api/workspaces/${workspaceId}/models`),
+
+  setSessionModel: (sessionId: string, model: string) =>
+    json<{ ok: boolean }>(`/api/sessions/${sessionId}/model`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model }),
+    }),
+
+  setSessionThinking: (sessionId: string, level: string) =>
+    json<{ ok: boolean }>(`/api/sessions/${sessionId}/thinking`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ level }),
+    }),
+
+  compactSession: (sessionId: string) =>
+    json<{ ok: boolean }>(`/api/sessions/${sessionId}/compact`, { method: "POST" }),
+
   listProjects: () => json<{ projects: ProjectInfo[] }>("/api/projects"),
 
   createProject: (body: { name: string; hostRootPath: string }) =>

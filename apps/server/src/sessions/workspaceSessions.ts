@@ -172,6 +172,15 @@ export class WorkspaceSessionManager {
       .run();
   }
 
+  async capabilities(sessionId: string) {
+    const { workspaceId } = this.require(sessionId);
+    return this.agents.sessionInfo(workspaceId, sessionId);
+  }
+
+  async models(workspaceId: string) {
+    return this.agents.sessionModels(workspaceId);
+  }
+
   async dispose(sessionId: string): Promise<void> {
     const { workspaceId } = this.require(sessionId);
     // Best-effort agent-side disposal (the agent may be offline); the

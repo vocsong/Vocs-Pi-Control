@@ -41,6 +41,7 @@ export interface EmbeddedPiDriverOptions {
 interface PiModule {
   createAgentSession(options: Record<string, unknown>): Promise<{
     session: AgentSession;
+    extensionsResult?: { extensions: Array<{ name?: string }>; errors: unknown[] };
     modelFallbackMessage?: string;
   }>;
   ModelRuntime: {
@@ -55,6 +56,11 @@ interface PiModule {
     open(path: string): unknown;
     continueRecent(cwd: string): unknown;
   };
+  DefaultResourceLoader: new (options?: Record<string, unknown>) => {
+    reload(): Promise<void>;
+    getSkills(): { skills: Array<{ name: string }>; diagnostics: unknown[] };
+    getPrompts(): { prompts: Array<{ name: string }>; diagnostics: unknown[] };
+  };
 }
 
 interface ManagedSession {
@@ -64,6 +70,11 @@ interface ManagedSession {
   /** Set while a text-bearing assistant message is streaming. */
   textMessageOpen: boolean;
   currentToolId: string | null;
+  /** Capability visibility captured at creation (Phase 9). */
+  tools: string[];
+  skills: string[];
+  extensions: string[];
+  prompts: string[];
 }
 
 // Injected by CJS bundlers (esbuild); undefined under tsx/ESM dev runs.
@@ -142,11 +153,20 @@ export class EmbeddedPiDriver implements PiSessionDriver {
     const sessionId = newId("pi");
     const model = await this.resolveModel(options.model);
 
+    // Build our own resource loader so capabilities can be surfaced
+    // (skills, prompts, extensions) — read-only visibility (plan §34).
+    const loader = new pi.DefaultResourceLoader({
+      cwd,
+      agentDir: this.options.agentDir ?? "/state/pi-agent",
+    });
+    await loader.reload();
+
     const result = await pi.createAgentSession({
       cwd,
       agentDir: this.options.agentDir ?? "/state/pi-agent",
       sessionManager: pi.SessionManager.create(cwd),
       modelRuntime: this.modelRuntime,
+      resourceLoader: loader,
       ...(model ? { model } : {}),
       ...(options.thinkingLevel ? { thinkingLevel: options.thinkingLevel } : {}),
     });
@@ -157,6 +177,10 @@ export class EmbeddedPiDriver implements PiSessionDriver {
       currentAssistantMessageId: null,
       textMessageOpen: false,
       currentToolId: null,
+      tools: [],
+      skills: (loader.getSkills() as { skills: Array<{ name: string }> }).skills.map((s) => s.name).filter(Boolean),
+      extensions: (result.extensionsResult?.extensions ?? []).map((e) => e.name ?? "<inline>").filter(Boolean),
+      prompts: (loader.getPrompts() as { prompts: Array<{ name: string }> }).prompts.map((p) => p.name).filter(Boolean),
     };
     this.sessions.set(sessionId, managed);
     result.session.subscribe((event) => this.dispatch(sessionId, event));
@@ -189,6 +213,10 @@ export class EmbeddedPiDriver implements PiSessionDriver {
       currentAssistantMessageId: null,
       textMessageOpen: false,
       currentToolId: null,
+      tools: [],
+      skills: [],
+      extensions: [],
+      prompts: [],
     };
     this.sessions.set(sessionId, managed);
     result.session.subscribe((event) => this.dispatch(sessionId, event));
@@ -262,6 +290,29 @@ export class EmbeddedPiDriver implements PiSessionDriver {
       lastActivityAt: Date.now(),
       usage: { tokensIn: session.agent.state.messages.length },
     };
+  }
+
+  async getSessionInfo(sessionId: string) {
+    const managed = this.require(sessionId);
+    const session = managed.session;
+    return {
+      model: session.model?.id,
+      thinkingLevel: session.thinkingLevel,
+      tools: session.agent.state.tools.map((t) => t.name).filter(Boolean),
+      skills: managed.skills,
+      extensions: managed.extensions,
+      prompts: managed.prompts,
+      messages: session.messages.length,
+      isStreaming: session.isStreaming,
+      sessionFile: session.sessionFile,
+    };
+  }
+
+  async listModels() {
+    const pi = await this.piModule();
+    if (!this.modelRuntime) return [];
+    const available = await this.modelRuntime.getAvailable();
+    return available.map((m) => ({ provider: m.provider?.id ?? "unknown", id: m.id ?? "" })).filter((m) => m.id);
   }
 
   subscribe(sessionId: string, listener: PiDriverEventListener): () => void {

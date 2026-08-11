@@ -290,6 +290,19 @@ export async function startAgentServer(options: AgentServerOptions): Promise<Age
           );
           return;
         }
+        case "agent.session.info": {
+          const request = command.payload as { sessionId: string };
+          const info = await sessionSupervisor.info(request.sessionId);
+          socket.send(
+            JSON.stringify({ type: "agent.session.info", payload: { sessionId: request.sessionId, info, commandId: command.id } } satisfies AgentEvent),
+          );
+          return;
+        }
+        case "agent.session.models": {
+          const models = await sessionSupervisor.models();
+          socket.send(JSON.stringify({ type: "agent.session.models", payload: { models, commandId: command.id } } satisfies AgentEvent));
+          return;
+        }
         case "agent.file.list": {
           const request = command.payload as { path?: string };
           const entries = await files.list(request.path ?? "");

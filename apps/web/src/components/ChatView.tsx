@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatItem } from "../store";
 import { usePiControl } from "../store";
+import { api } from "../api";
 
 function UserMessage({ item }: { item: Extract<ChatItem, { kind: "user" }> }) {
   return (
@@ -75,10 +76,70 @@ export function ChatView() {
   const items = usePiControl((s) => s.items);
   const usage = usePiControl((s) => s.usage);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [models, setModels] = useState<Array<{ provider: string; id: string }>>([]);
+  const [capabilities, setCapabilities] = useState<Record<string, unknown> | null>(null);
+  const [showCaps, setShowCaps] = useState(false);
+  const [controlError, setControlError] = useState<string | null>(null);
 
   const session = activeSessionId ? sessions[activeSessionId] : undefined;
   const messages = activeSessionId ? (items[activeSessionId] ?? []) : [];
   const sessionUsage = activeSessionId ? usage[activeSessionId] : undefined;
+
+  const loadCapabilities = useCallback(async () => {
+    if (!activeSessionId) return;
+    const s = usePiControl.getState().sessions[activeSessionId];
+    if (!s?.workspaceId) return;
+    try {
+      const { capabilities: caps } = await api.sessionCapabilities(activeSessionId);
+      setCapabilities(caps);
+    } catch {
+      /* agent offline etc. */
+    }
+  }, [activeSessionId]);
+
+  useEffect(() => {
+    setCapabilities(null);
+    setModels([]);
+    if (activeSessionId) void loadCapabilities();
+    const sessionInfo = activeSessionId ? usePiControl.getState().sessions[activeSessionId] : undefined;
+    if (sessionInfo?.workspaceId) {
+      api
+        .listModels(sessionInfo.workspaceId)
+        .then(({ models: m }) => setModels(m))
+        .catch(() => undefined);
+    }
+  }, [activeSessionId, loadCapabilities]);
+
+  const setModel = async (model: string) => {
+    if (!activeSessionId) return;
+    setControlError(null);
+    try {
+      await api.setSessionModel(activeSessionId, model);
+    } catch (e) {
+      setControlError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const setThinking = async (level: string) => {
+    if (!activeSessionId) return;
+    setControlError(null);
+    try {
+      await api.setSessionThinking(activeSessionId, level);
+    } catch (e) {
+      setControlError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const compact = async () => {
+    if (!activeSessionId) return;
+    setControlError(null);
+    try {
+      await api.compactSession(activeSessionId);
+      void loadCapabilities();
+    } catch (e) {
+      setControlError(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -101,16 +162,68 @@ export function ChatView() {
       <header className="session-header">
         <span className="session-header-title">{session.title}</span>
         <span className={`status-dot status-${session.status}`} title={session.status} />
-        <span className="session-header-meta">
-          {session.status}
-          {session.model ? ` · ${session.model}` : ""}
-        </span>
+        <span className="session-header-meta">{session.status}</span>
+        {session.workspaceId && (
+          <>
+            {models.length > 0 && (
+              <select
+                className="session-control"
+                title="Model (provider/model-id)"
+                value={session.model ?? ""}
+                onChange={(e) => void setModel(e.target.value)}
+              >
+                <option value={session.model ?? ""}>{session.model ?? "default"}</option>
+                {models
+                  .filter((m) => m.id !== session.model)
+                  .map((m) => (
+                    <option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>
+                      {m.provider}/{m.id}
+                    </option>
+                  ))}
+              </select>
+            )}
+            <select
+              className="session-control"
+              title="Thinking level"
+              value={session.thinkingLevel ?? ""}
+              onChange={(e) => void setThinking(e.target.value)}
+            >
+              <option value={session.thinkingLevel ?? ""}>{session.thinkingLevel ?? "default"}</option>
+              {["off", "minimal", "low", "medium", "high", "xhigh", "max"]
+                .filter((l) => l !== session.thinkingLevel)
+                .map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+            </select>
+            <button className="btn btn-small" title="Compact context" onClick={() => void compact()}>
+              Compact
+            </button>
+            <button className="btn btn-small" title="Tools / skills / extensions" onClick={() => setShowCaps((v) => !v)}>
+              Caps
+            </button>
+          </>
+        )}
         {sessionUsage && (
           <span className="session-header-meta" title="Context usage">
             ctx {sessionUsage.contextPercent ?? "?"}%
           </span>
         )}
+        {controlError && <span className="form-error">{controlError}</span>}
       </header>
+      {showCaps && capabilities && (
+        <div className="caps-popover">
+          {(Object.keys(capabilities) as Array<keyof typeof capabilities>)
+            .filter((k) => Array.isArray(capabilities[k]) && (capabilities[k] as unknown[]).length > 0)
+            .map((k) => (
+              <div key={String(k)} className="caps-row">
+                <span className="caps-key">{String(k)}</span>
+                <span className="caps-values">{(capabilities[k] as string[]).join(", ")}</span>
+              </div>
+            ))}
+        </div>
+      )}
       <div className="messages" ref={scrollRef}>
         {messages.length === 0 ? (
           <div className="empty-chat">Ask Pi something to get started.</div>

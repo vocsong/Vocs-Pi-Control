@@ -36,6 +36,8 @@ export const AGENT_COMMAND_TYPES = [
   "agent.session.setThinkingLevel",
   "agent.session.dispose",
   "agent.session.list",
+  "agent.session.info",
+  "agent.session.models",
   "agent.file.list",
   "agent.file.read",
   "agent.file.write",
@@ -342,6 +344,8 @@ export const AGENT_EVENT_TYPES = [
   "agent.session.created",
   "agent.session.event",
   "agent.session.list",
+  "agent.session.info",
+  "agent.session.models",
   "agent.file.list",
   "agent.file.read",
   "agent.file.ok",
@@ -464,6 +468,27 @@ export interface AgentSessionEventPayload {
 
 export interface AgentSessionListPayload {
   sessions: AgentSessionInfo[];
+  commandId?: string;
+}
+
+export interface AgentSessionInfoPayload {
+  sessionId: string;
+  info: {
+    model?: string;
+    thinkingLevel?: string;
+    tools: string[];
+    skills: string[];
+    extensions: string[];
+    prompts: string[];
+    messages: number;
+    isStreaming: boolean;
+    sessionFile?: string;
+  };
+  commandId?: string;
+}
+
+export interface AgentSessionModelsPayload {
+  models: Array<{ provider: string; id: string }>;
   commandId?: string;
 }
 

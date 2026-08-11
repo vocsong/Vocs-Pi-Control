@@ -46,6 +46,24 @@ export interface PiSessionSnapshot {
   usage?: UsageInfo;
 }
 
+/** Read-only visibility into a session's runtime capabilities (Phase 9). */
+export interface SessionRuntimeInfo {
+  model?: string;
+  thinkingLevel?: string;
+  tools: string[];
+  skills: string[];
+  extensions: string[];
+  prompts: string[];
+  messages: number;
+  isStreaming: boolean;
+  sessionFile?: string;
+}
+
+export interface ModelCatalogEntry {
+  provider: string;
+  id: string;
+}
+
 /* ------------------------------------------------------------------ */
 /* Driver events (normalized, upstream-agnostic)                       */
 /* ------------------------------------------------------------------ */
@@ -85,6 +103,12 @@ export interface PiSessionDriver {
   setThinkingLevel(sessionId: string, level: string): Promise<void>;
 
   getSnapshot(sessionId: string): Promise<PiSessionSnapshot>;
+
+  /** Capability visibility (tools/skills/extensions/prompts). */
+  getSessionInfo(sessionId: string): Promise<SessionRuntimeInfo>;
+
+  /** Models available to the runtime (provider catalogs + auth status). */
+  listModels(): Promise<ModelCatalogEntry[]>;
 
   subscribe(sessionId: string, listener: PiDriverEventListener): () => void;
 

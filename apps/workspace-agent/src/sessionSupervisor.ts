@@ -110,6 +110,14 @@ export class SessionSupervisor {
     return [...this.sessions.values()].map((m) => ({ ...m.info }));
   }
 
+  async info(sessionId: string) {
+    return this.driver.getSessionInfo(this.require(sessionId));
+  }
+
+  async models() {
+    return this.driver.listModels();
+  }
+
   count(): number {
     return this.sessions.size;
   }
