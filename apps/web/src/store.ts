@@ -123,19 +123,41 @@ export const usePiControl = create<PiControlState>((set, get) => ({
   setActiveSandbox: (activeSandboxId) => set({ activeSandboxId }),
 
   createSession: async () => {
-    // Prefer a REAL Pi session: when a workspace is running (agent
-    // connected), create the session inside it; otherwise fall back to the
-    // mock server-side session.
+    // REAL Pi sessions only — they run inside a sandbox. Prefer the
+    // SELECTED workspace's sandbox (auto-starting/creating it when
+    // needed); fall back to any running sandbox.
     const state = get();
-    const runningSandbox = Object.values(state.sandboxes).find((sb) => sb.status === "running");
-    if (runningSandbox) {
-      return state.createWorkspaceSession(runningSandbox.id);
+    const sandboxes = Object.values(state.sandboxes);
+    if (sandboxes.length === 0) {
+      throw new Error("Create a workspace first — its sandbox provides the environment for Pi sessions.");
     }
-    const { session } = await api.createSession({
-      title: `Session ${Object.keys(state.sessions).length + 1}`,
-    });
-    const sessions = { ...get().sessions, [session.id]: session };
-    set({ sessions, sessionOrder: appendOrder(get().sessionOrder, session.id), activeSessionId: session.id });
+
+    // 1. The sandbox of the active workspace, if any.
+    let sandbox = state.activeWorkspaceId
+      ? sandboxes.find((sb) => sb.workspaceId === state.activeWorkspaceId)
+      : undefined;
+
+    // 2. Missing sandbox for the selected workspace -> create + start it.
+    if (!sandbox && state.activeWorkspaceId) {
+      await state.startWorkspaceFlow(state.activeWorkspaceId);
+      sandbox = Object.values(get().sandboxes).find((sb) => sb.workspaceId === state.activeWorkspaceId);
+    }
+
+    // 3. Stopped sandbox -> start it.
+    if (sandbox && sandbox.status !== "running") {
+      await state.startSandbox(sandbox.id);
+      sandbox = get().sandboxes[sandbox.id];
+    }
+
+    // 4. Fallback: any running sandbox.
+    if (!sandbox || sandbox.status !== "running") {
+      sandbox = Object.values(get().sandboxes).find((sb) => sb.status === "running");
+    }
+
+    if (!sandbox) {
+      throw new Error("Could not start the workspace sandbox.");
+    }
+    return state.createWorkspaceSession(sandbox.id);
   },
 
   createWorkspaceSession: async (workspaceId) => {
