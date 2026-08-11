@@ -1,5 +1,11 @@
 import { create } from "zustand";
-import type { EventEnvelope, SessionInfo, UsageInfo } from "@pi-control/protocol";
+import type {
+  EventEnvelope,
+  ProjectInfo,
+  SessionInfo,
+  UsageInfo,
+  WorkspaceInfo,
+} from "@pi-control/protocol";
 import { EVENT_TYPES } from "@pi-control/protocol";
 import { api } from "./api";
 
@@ -19,6 +25,23 @@ export type ChatItem =
     }
   | { kind: "system"; text: string; tone: "info" | "error" };
 
+export interface SandboxStatusInfo {
+  runtime: string;
+  detected: boolean;
+  rootlessAvailable: boolean;
+  machineRequired: boolean;
+  machineConfigured: boolean;
+  machineRunning: boolean;
+  version?: string;
+  messages: string[];
+}
+
+export interface SelfTestCheckInfo {
+  name: string;
+  ok: boolean;
+  detail: string;
+}
+
 interface PiControlState {
   connection: "connecting" | "open" | "closed";
   sessions: Record<string, SessionInfo>;
@@ -31,10 +54,32 @@ interface PiControlState {
   clientId: string | null;
   /** Editing leases per session (plan §27). */
   leases: Record<string, { holder: string | null; expiresAt: number | null }>;
+  /** Projects / workspaces hierarchy (Phase 5). */
+  projects: Record<string, ProjectInfo>;
+  projectOrder: string[];
+  workspaces: Record<string, WorkspaceInfo>;
+  workspaceOrder: string[];
+  /** Selected project/workspace for navigation. */
+  activeProjectId: string | null;
+  activeWorkspaceId: string | null;
+  /** Sandbox runtime status (Phase 1). */
+  sandbox: SandboxStatusInfo | null;
+  sandboxBusy: boolean;
+  selfTest: SelfTestCheckInfo[] | null;
 
   setConnection(connection: PiControlState["connection"]): void;
   setActive(sessionId: string | null): void;
+  setActiveProject(projectId: string | null): void;
+  setActiveWorkspace(workspaceId: string | null): void;
   createSession(): Promise<void>;
+  createWorkspaceSession(workspaceId: string): Promise<void>;
+  createProject(name: string, hostRootPath: string): Promise<void>;
+  createWorkspace(name: string, hostPath: string): Promise<void>;
+  startWorkspace(workspaceId: string): Promise<void>;
+  stopWorkspace(workspaceId: string): Promise<void>;
+  removeWorkspace(workspaceId: string): Promise<void>;
+  prepareSandbox(): Promise<void>;
+  runSelfTest(): Promise<void>;
   apply(envelope: EventEnvelope): void;
 }
 
@@ -48,9 +93,20 @@ export const usePiControl = create<PiControlState>((set, get) => ({
   lastSeq: 0,
   clientId: null,
   leases: {},
+  projects: {},
+  projectOrder: [],
+  workspaces: {},
+  workspaceOrder: [],
+  activeProjectId: null,
+  activeWorkspaceId: null,
+  sandbox: null,
+  sandboxBusy: false,
+  selfTest: null,
 
   setConnection: (connection) => set({ connection }),
   setActive: (activeSessionId) => set({ activeSessionId }),
+  setActiveProject: (activeProjectId) => set({ activeProjectId }),
+  setActiveWorkspace: (activeWorkspaceId) => set({ activeWorkspaceId }),
 
   createSession: async () => {
     const { session } = await api.createSession({
@@ -61,6 +117,88 @@ export const usePiControl = create<PiControlState>((set, get) => ({
       ? get().sessionOrder
       : [...get().sessionOrder, session.id];
     set({ sessions, sessionOrder, activeSessionId: session.id });
+  },
+
+  createWorkspaceSession: async (workspaceId) => {
+    const { session } = await api.createWorkspaceSession(workspaceId, {
+      title: `Session ${Object.keys(get().sessions).length + 1}`,
+    });
+    const sessions = { ...get().sessions, [session.id]: session };
+    const sessionOrder = get().sessionOrder.includes(session.id)
+      ? get().sessionOrder
+      : [...get().sessionOrder, session.id];
+    set({ sessions, sessionOrder, activeSessionId: session.id });
+  },
+
+  createProject: async (name, hostRootPath) => {
+    const { project } = await api.createProject({ name, hostRootPath });
+    set({
+      projects: { ...get().projects, [project.id]: project },
+      projectOrder: [...get().projectOrder, project.id],
+      activeProjectId: project.id,
+    });
+  },
+
+  createWorkspace: async (name, hostPath) => {
+    const projectId = get().activeProjectId;
+    if (!projectId) throw new Error("no active project");
+    const { workspace } = await api.createWorkspace(projectId, {
+      name,
+      hostPath,
+      securityProfile: "standard",
+    });
+    set({
+      workspaces: { ...get().workspaces, [workspace.id]: workspace },
+      workspaceOrder: [...get().workspaceOrder, workspace.id],
+      activeWorkspaceId: workspace.id,
+    });
+  },
+
+  startWorkspace: async (workspaceId) => {
+    const { workspace } = await api.startWorkspace(workspaceId);
+    set({ workspaces: { ...get().workspaces, [workspaceId]: workspace } });
+  },
+
+  stopWorkspace: async (workspaceId) => {
+    const { workspace } = await api.stopWorkspace(workspaceId);
+    set({ workspaces: { ...get().workspaces, [workspaceId]: workspace } });
+  },
+
+  removeWorkspace: async (workspaceId) => {
+    await api.removeWorkspace(workspaceId);
+    const workspaces = { ...get().workspaces };
+    delete workspaces[workspaceId];
+    set({
+      workspaces,
+      workspaceOrder: get().workspaceOrder.filter((id) => id !== workspaceId),
+      activeWorkspaceId: get().activeWorkspaceId === workspaceId ? null : get().activeWorkspaceId,
+    });
+  },
+
+  prepareSandbox: async () => {
+    set({ sandboxBusy: true });
+    try {
+      const result = await api.sandboxPrepare();
+      const status = await api.sandboxStatus();
+      set({ sandbox: status.status, sandboxBusy: false });
+      if (!result.ok) {
+        console.warn("sandbox prepare incomplete", result.messages);
+      }
+    } catch (error) {
+      set({ sandboxBusy: false });
+      throw error;
+    }
+  },
+
+  runSelfTest: async () => {
+    set({ sandboxBusy: true });
+    try {
+      const result = await api.sandboxSelfTest();
+      set({ selfTest: result.checks, sandboxBusy: false });
+    } catch (error) {
+      set({ sandboxBusy: false });
+      throw error;
+    }
   },
 
   apply: (envelope) => {
@@ -105,6 +243,43 @@ export const usePiControl = create<PiControlState>((set, get) => ({
         const info = (envelope.payload as { session: SessionInfo }).session;
         upsertSession(info);
         push({ kind: "system", text: "Session created", tone: "info" }, info.id);
+        break;
+      }
+      case EVENT_TYPES.projectCreated: {
+        const info = (envelope.payload as { project: ProjectInfo }).project;
+        set({
+          projects: { ...state.projects, [info.id]: info },
+          projectOrder: state.projectOrder.includes(info.id) ? state.projectOrder : [...state.projectOrder, info.id],
+        });
+        break;
+      }
+      case EVENT_TYPES.workspaceCreated: {
+        const info = (envelope.payload as { workspace: WorkspaceInfo }).workspace;
+        set({
+          workspaces: { ...state.workspaces, [info.id]: info },
+          workspaceOrder: state.workspaceOrder.includes(info.id) ? state.workspaceOrder : [...state.workspaceOrder, info.id],
+        });
+        break;
+      }
+      case EVENT_TYPES.workspaceState: {
+        const payload = envelope.payload as { workspaceId: string; status: WorkspaceInfo["status"] };
+        const current = state.workspaces[payload.workspaceId];
+        if (current) {
+          set({ workspaces: { ...state.workspaces, [payload.workspaceId]: { ...current, status: payload.status } } });
+        }
+        break;
+      }
+      case EVENT_TYPES.sandboxStatus: {
+        set({ sandbox: envelope.payload as SandboxStatusInfo });
+        break;
+      }
+      case EVENT_TYPES.agentState: {
+        // Agent connection state reflects in the workspace status detail.
+        const payload = envelope.payload as { workspaceId: string; state: string };
+        const current = state.workspaces[payload.workspaceId];
+        if (current && current.status === "running") {
+          set({ workspaces: { ...state.workspaces, [payload.workspaceId]: { ...current } } });
+        }
         break;
       }
       case EVENT_TYPES.sessionSnapshot: {

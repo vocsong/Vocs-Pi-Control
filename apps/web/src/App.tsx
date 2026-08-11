@@ -19,7 +19,7 @@ export function App() {
     return () => client.disconnect();
   }, []);
 
-  // Initial load: health + persisted sessions.
+  // Initial load: health + persisted sessions + hierarchy + sandbox status.
   useEffect(() => {
     api.health().then(setHealth).catch(() => setHealth(null));
     api
@@ -37,6 +37,28 @@ export function App() {
       .catch(() => {
         /* server may not be up yet; the socket will surface it */
       });
+    api
+      .listProjects()
+      .then(({ projects }) => {
+        usePiControl.setState({
+          projects: Object.fromEntries(projects.map((p) => [p.id, p])),
+          projectOrder: projects.map((p) => p.id),
+        });
+      })
+      .catch(() => undefined);
+    api
+      .listWorkspaces()
+      .then(({ workspaces }) => {
+        usePiControl.setState({
+          workspaces: Object.fromEntries(workspaces.map((w) => [w.id, w])),
+          workspaceOrder: workspaces.map((w) => w.id),
+        });
+      })
+      .catch(() => undefined);
+    api
+      .sandboxStatus()
+      .then(({ status }) => usePiControl.setState({ sandbox: status }))
+      .catch(() => undefined);
   }, []);
 
   // Subscribe to the active session whenever the connection (re)opens, and

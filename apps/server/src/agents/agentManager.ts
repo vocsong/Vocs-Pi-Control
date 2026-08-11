@@ -124,6 +124,7 @@ export class AgentManager {
   }
 
   async createSession(workspaceId: string, request: AgentSessionCreateRequest) {
+    await this.waitForConnection(workspaceId);
     const event = await this.require(workspaceId).request("agent.session.create", request, 120_000);
     return event.payload as Record<string, unknown>;
   }
@@ -190,6 +191,23 @@ export class AgentManager {
   }
 
   /* ------------------------------------------------------------------ */
+
+  /**
+   * The agent inside a freshly started container needs a moment to boot and
+   * for the port forward to come up; wait (bounded) for a connected client
+   * before issuing the first command.
+   */
+  private async waitForConnection(workspaceId: string, timeoutMs = 10_000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const status = this.statuses.get(workspaceId);
+      if (status?.state === "connected") return;
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+    const client = this.clients.get(workspaceId);
+    if (!client) throw new Error(`No agent connection for workspace ${workspaceId}`);
+    throw new Error(`Workspace agent for ${workspaceId} is not connected yet`);
+  }
 
   private require(workspaceId: string): AgentClient {
     const client = this.clients.get(workspaceId);
