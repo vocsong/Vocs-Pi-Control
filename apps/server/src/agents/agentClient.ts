@@ -29,6 +29,7 @@ export interface AgentClientEvents {
   onProcessStarted(process: AgentProcessInfo): void;
   onProcessOutput(payload: { processId: string; stream: "stdout" | "stderr"; text: string }): void;
   onProcessExited(processId: string, exitCode: number): void;
+  onSessionEvent(sessionId: string, envelope: { scope: string; sessionId: string; type: string; payload: unknown }): void;
   onState(state: AgentConnectionState, detail?: string): void;
 }
 
@@ -38,6 +39,8 @@ export interface AgentClientOptions {
   workspaceId: string;
   events: AgentClientEvents;
   logger: Logger;
+  /** Provider credential env vars forwarded at hello (V1 boundary). */
+  credentials?: Record<string, string>;
   reconnectBaseMs?: number;
 }
 
@@ -132,6 +135,9 @@ export class AgentClient {
           workspaceId: this.options.workspaceId,
           agentVersion: "pi-control-server",
           protocolVersion: AGENT_PROTOCOL_VERSION,
+          ...(this.options.credentials && Object.keys(this.options.credentials).length > 0
+            ? { env: this.options.credentials }
+            : {}),
         },
       };
       ws.send(JSON.stringify(hello));
@@ -191,6 +197,16 @@ export class AgentClient {
           (event.payload as { processId: string }).processId,
           (event.payload as { exitCode: number }).exitCode,
         );
+        return;
+      case "agent.session.event":
+        this.options.events.onSessionEvent(
+          (event.payload as { sessionId: string }).sessionId,
+          (event.payload as { envelope: { scope: string; sessionId: string; type: string; payload: unknown } }).envelope,
+        );
+        return;
+      case "agent.session.created":
+      case "agent.session.list":
+        this.resolve((event.payload as { commandId?: string }).commandId ?? "", event);
         return;
       case "agent.exec.exit":
         this.resolve((event.payload as { commandId: string }).commandId, event);

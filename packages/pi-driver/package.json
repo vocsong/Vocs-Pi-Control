@@ -5,7 +5,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./mock": "./src/mock.ts"
+    "./mock": "./src/mock.ts",
+    "./embedded": "./src/embedded.ts",
+    "./events": "./src/events.ts"
   },
   "types": "./src/index.ts",
   "main": "./src/index.ts",
@@ -16,6 +18,9 @@
   "dependencies": {
     "@pi-control/protocol": "workspace:*",
     "@pi-control/shared": "workspace:*"
+  },
+  "optionalDependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.1"
   },
   "devDependencies": {
     "typescript": "^5.8.3",

@@ -33,6 +33,8 @@ export interface PiSessionHandle {
   id: string;
   /** Native Pi session id when a native session exists (Phase 3+). */
   nativePiSessionId?: string;
+  /** Native session file path (for resume). */
+  sessionFile?: string;
   status: SessionStatus;
   model?: string;
   thinkingLevel?: string;
@@ -91,3 +93,8 @@ export interface PiSessionDriver {
 
 /** Driver factory used by the session supervisor. */
 export type PiDriverFactory = () => PiSessionDriver;
+
+/* Re-exports for consumers (mock for tests, embedded for real Pi). */
+export { MockPiDriver, type MockPiDriverOptions } from "./mock.js";
+export { EmbeddedPiDriver, type EmbeddedPiDriverOptions } from "./embedded.js";
+export { driverEventToEnvelope } from "./events.js";

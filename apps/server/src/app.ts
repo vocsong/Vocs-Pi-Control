@@ -4,6 +4,7 @@ import type { Db } from "@pi-control/database";
 import type { Logger } from "./logger.js";
 import type { RealtimeHub } from "./realtime/hub.js";
 import type { SessionManager } from "./sessions/manager.js";
+import type { WorkspaceSessionManager } from "./sessions/workspaceSessions.js";
 import type { SandboxManager } from "./sandbox/manager.js";
 import type { AgentManager } from "./agents/agentManager.js";
 import { registerRealtime } from "./realtime/ws.js";
@@ -19,6 +20,7 @@ export interface AppDeps {
   db: Db;
   hub: RealtimeHub;
   sessions: SessionManager;
+  workspaceSessions: WorkspaceSessionManager;
   sandbox: SandboxManager;
   agents: AgentManager;
   runtimeName: string;
@@ -38,7 +40,7 @@ export async function buildApp(deps: AppDeps): Promise<AppFastify> {
   await app.register(fastifyWebsocket);
 
   registerHealthRoutes(app, deps);
-  registerSessionRoutes(app, deps.sessions);
+  registerSessionRoutes(app, deps.sessions, deps.workspaceSessions);
   registerProjectRoutes(app, deps.sandbox);
   registerWorkspaceRoutes(app, deps.sandbox, deps.agents);
   registerSandboxRoutes(app, deps.sandbox);

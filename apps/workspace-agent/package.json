@@ -11,6 +11,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.1",
+    "@pi-control/pi-driver": "workspace:*",
     "@pi-control/protocol": "workspace:*",
     "@pi-control/shared": "workspace:*",
     "ws": "^8.18.0"

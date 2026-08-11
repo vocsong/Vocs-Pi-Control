@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import { WebSocket } from "ws";
+import { MockPiDriver } from "@pi-control/pi-driver/mock";
 import { startAgentServer, type AgentServerHandle } from "./agentServer.js";
 import type { AgentConfig } from "./config.js";
 import { waitFor } from "@pi-control/test-utils";
@@ -16,7 +17,11 @@ let handle: AgentServerHandle;
 let baseUrl: string;
 
 beforeAll(async () => {
-  handle = await startAgentServer({ config: CONFIG, logger: () => undefined });
+  handle = await startAgentServer({
+    config: CONFIG,
+    logger: () => undefined,
+    driver: new MockPiDriver({ speedMs: 1 }),
+  });
   baseUrl = `ws://127.0.0.1:${CONFIG.port}`;
 });
 
@@ -132,4 +137,42 @@ describe("workspace agent server", () => {
     expect(health?.payload.memory).toBeTypeOf("object");
     ws.close();
   });
+
+  it("creates and drives Pi sessions through the session supervisor", async () => {
+    const ws = await connect();
+
+    // create
+    send(ws, "agent.session.create", { sessionId: "session_a", title: "Test session" });
+    const created = await collect(ws, (e) =>
+      e.some((x) => x.type === "agent.session.created" && x.id === undefined),
+    );
+    const createdEvent = created.find((e) => e.type === "agent.session.created")!;
+    expect(createdEvent.payload).toMatchObject({ sessionId: "session_a", title: "Test session" });
+
+    // prompt → streamed driver events as agent.session.event
+    send(ws, "agent.session.prompt", { sessionId: "session_a", text: "hello pi" });
+    const stream = await collect(ws, (e) =>
+      e.some((x) => x.type === "agent.session.event" && (x.payload as { envelope?: { type?: string } }).envelope?.type === "assistant.end"),
+      10_000,
+    );
+    const envelopes = stream
+      .filter((e) => e.type === "agent.session.event")
+      .map((e) => (e.payload as { envelope: { type: string } }).envelope.type);
+    expect(envelopes).toContain("user.message");
+    expect(envelopes).toContain("thinking.start");
+    expect(envelopes).toContain("tool.start");
+    expect(envelopes).toContain("assistant.delta");
+    expect(envelopes).toContain("session.state");
+
+    // list
+    send(ws, "agent.session.list", {});
+    const list = await collect(ws, (e) => e.some((x) => x.type === "agent.session.list"));
+    const listPayload = list.find((e) => e.type === "agent.session.list")?.payload;
+    expect(listPayload.sessions.some((s: { sessionId: string }) => s.sessionId === "session_a")).toBe(true);
+
+    // abort
+    send(ws, "agent.session.abort", { sessionId: "session_a" });
+    await collect(ws, (e) => e.some((x) => x.type === "agent.ok"));
+    ws.close();
+  }, 20_000);
 });

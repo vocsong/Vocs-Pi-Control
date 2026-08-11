@@ -34,7 +34,19 @@ WORKDIR /workspace
 
 # Phase 2: the workspace agent is the container entrypoint. It authenticates
 # to the control server with PI_CONTROL_AGENT_TOKEN and owns processes and
-# (Phase 3) Pi sessions. Without a token it stays idle (ad-hoc use).
+# Pi sessions. Without a token it stays idle (ad-hoc use).
+
+# Phase 3: the real Pi coding-agent SDK (ESM, resolved at runtime via
+# NODE_PATH — the agent bundle keeps it external). Pinned to the version
+# validated against the control plane.
+ARG PI_CODING_AGENT_VERSION=0.84.1
+RUN mkdir -p /opt/pi-control \
+  && cd /opt/pi-control \
+  && npm init -y > /dev/null \
+  && npm install --no-audit --no-fund @earendil-works/pi-coding-agent@${PI_CODING_AGENT_VERSION} 2>&1 | tail -2
+
+ENV NODE_PATH=/opt/pi-control/node_modules
+
 COPY agent/agent.cjs /usr/local/lib/pi-control-workspace-agent.cjs
 
 ENTRYPOINT ["node", "/usr/local/lib/pi-control-workspace-agent.cjs"]

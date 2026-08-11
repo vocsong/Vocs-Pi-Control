@@ -10,6 +10,7 @@ import {
   type AgentProcessInfo,
   type AgentProcessSpawnRequest,
   type AgentReadyPayload,
+  type AgentSessionCreateRequest,
 } from "@pi-control/protocol";
 import type { RealtimeHub } from "../realtime/hub.js";
 import type { Logger } from "../logger.js";
@@ -30,6 +31,34 @@ export interface AgentStatus {
   detail?: string;
 }
 
+/**
+ * Provider credential env vars the control server owns and forwards to the
+ * workspace agent (V1 boundary per ADR-0010: documented, scrubbing comes
+ * with the credential broker).
+ */
+const PROVIDER_KEY_ENV = [
+  "ANTHROPIC_API_KEY",
+  "OPENAI_API_KEY",
+  "DEEPSEEK_API_KEY",
+  "GEMINI_API_KEY",
+  "GROQ_API_KEY",
+  "XAI_API_KEY",
+  "OPENROUTER_API_KEY",
+  "MISTRAL_API_KEY",
+  "COHERE_API_KEY",
+  "TOGETHER_API_KEY",
+  "PERPLEXITY_API_KEY",
+] as const;
+
+export function extractProviderEnv(env: NodeJS.ProcessEnv = process.env): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const key of PROVIDER_KEY_ENV) {
+    const value = env[key];
+    if (value) out[key] = value;
+  }
+  return out;
+}
+
 export class AgentManager {
   private readonly clients = new Map<string, AgentClient>();
   private readonly statuses = new Map<string, AgentStatus>();
@@ -37,6 +66,8 @@ export class AgentManager {
   constructor(
     private readonly hub: RealtimeHub,
     private readonly logger: Logger,
+    /** Optional hook for session-scoped agent events (e.g. DB status sync). */
+    private readonly sessionEventHook?: (sessionId: string, envelope: { type: string; payload: unknown }) => void,
   ) {}
 
   /** Start (or restart) the connection for a workspace. */
@@ -55,12 +86,22 @@ export class AgentManager {
       token: endpoint.token,
       workspaceId,
       logger: this.logger,
+      credentials: extractProviderEnv(),
       events: {
         onReady: (info) => this.handleReady(workspaceId, status, info),
         onHealth: (health) => this.handleHealth(workspaceId, status, health),
         onProcessStarted: (process) => this.handleProcessStarted(workspaceId, status, process),
         onProcessOutput: (payload) => this.handleProcessOutput(workspaceId, payload),
         onProcessExited: (processId, exitCode) => this.handleProcessExited(workspaceId, status, processId, exitCode),
+        onSessionEvent: (sessionId, envelope) => {
+          this.sessionEventHook?.(sessionId, envelope);
+          this.hub.publish({
+            scope: "session",
+            sessionId,
+            type: envelope.type,
+            payload: envelope.payload,
+          });
+        },
         onState: (state, detail) => this.handleState(workspaceId, status, state, detail),
       },
     });
@@ -80,6 +121,48 @@ export class AgentManager {
 
   async exec(workspaceId: string, request: AgentExecRequest) {
     return this.require(workspaceId).exec(request);
+  }
+
+  async createSession(workspaceId: string, request: AgentSessionCreateRequest) {
+    const event = await this.require(workspaceId).request("agent.session.create", request, 120_000);
+    return event.payload as Record<string, unknown>;
+  }
+
+  async resumeSession(workspaceId: string, sessionId: string, nativeSessionPath: string) {
+    const event = await this.require(workspaceId).request(
+      "agent.session.resume",
+      { sessionId, nativeSessionPath },
+      120_000,
+    );
+    return event.payload as Record<string, unknown>;
+  }
+
+  async promptSession(workspaceId: string, sessionId: string, text: string): Promise<void> {
+    await this.require(workspaceId).request("agent.session.prompt", { sessionId, text }, 10_000);
+  }
+
+  async steerSession(workspaceId: string, sessionId: string, text: string): Promise<void> {
+    await this.require(workspaceId).request("agent.session.steer", { sessionId, text }, 10_000);
+  }
+
+  async followUpSession(workspaceId: string, sessionId: string, text: string): Promise<void> {
+    await this.require(workspaceId).request("agent.session.followUp", { sessionId, text }, 10_000);
+  }
+
+  async abortSession(workspaceId: string, sessionId: string): Promise<void> {
+    await this.require(workspaceId).request("agent.session.abort", { sessionId }, 10_000);
+  }
+
+  async compactSession(workspaceId: string, sessionId: string): Promise<void> {
+    await this.require(workspaceId).request("agent.session.compact", { sessionId }, 10_000);
+  }
+
+  async setSessionModel(workspaceId: string, sessionId: string, model: string): Promise<void> {
+    await this.require(workspaceId).request("agent.session.setModel", { sessionId, model }, 10_000);
+  }
+
+  async setSessionThinkingLevel(workspaceId: string, sessionId: string, level: string): Promise<void> {
+    await this.require(workspaceId).request("agent.session.setThinkingLevel", { sessionId, level }, 10_000);
   }
 
   async spawnProcess(workspaceId: string, request: AgentProcessSpawnRequest): Promise<AgentProcessInfo> {
@@ -120,7 +203,7 @@ export class AgentManager {
     status.processes = info.processes;
     status.state = "connected";
     this.logger.info(
-      { workspaceId, agentVersion: info.agentVersion, processes: info.processes.length },
+      { workspaceId, agentVersion: info.agentVersion, processes: info.processes.length, sessions: info.sessions?.length ?? 0 },
       "workspace agent connected",
     );
     this.publish(workspaceId, EVENT_TYPES.agentState, {

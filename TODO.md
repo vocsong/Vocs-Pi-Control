@@ -77,12 +77,29 @@ the server with fake session streaming — **done locally, needs CI wiring**.
 Acceptance: control server stop/reconnect without losing agent-managed
 processes — **verified on Windows 11 + WSL machine**.
 
-## Phase 3 — Real Pi Integration
+## Phase 3 — Real Pi Integration (complete)
 
-- [ ] EmbeddedPiDriver using current official Pi SDK/AgentSession APIs
-- [ ] create session, native session persistence, resume
-- [ ] prompt/steer/follow-up, streaming, thinking/tool events, abort
-- [ ] model/thinking/context/usage info
+- [x] `EmbeddedPiDriver` using the official Pi SDK (`createAgentSession`, 0.84.x)
+- [x] create session with persistent `SessionManager.create(cwd)` — native
+      sessions live in `/state/pi-agent/sessions` (survive container rebuilds)
+- [x] resume via `SessionManager.open(path)` (verified: restarted workspace,
+      resumed session recalled the earlier conversation)
+- [x] prompt / steer / followUp / abort / compact / setModel / setThinkingLevel
+- [x] streaming: text deltas, thinking deltas, tool executions (bash + write
+      verified with real outputs)
+- [x] model/thinking info; usage via session snapshot
+- [x] event mapping fixed against the real SDK: text_start/delta/end bound
+      to the UI stream; thinking/toolcall segments don't close messages
+- [x] ESM-only pi loaded via manual NODE_PATH resolution in the CJS bundle
+- [x] provider credentials: control server forwards env keys at agent hello
+      (V1 boundary, ADR-0010)
+- [x] workspace sessions: create/resume/prompt/abort REST + WS routing
+- [x] base image installs pi (0.84.1, pinned, NODE_PATH)
+- [ ] UI session creation for workspaces (Phase 5 navigation)
+
+Acceptance: Pi inside sandbox inspected /workspace (bash ls), wrote
+`phase3-proof.txt` (visible on host), ran tests, streamed everything through
+browser protocol; host home/sockets stayed absent — **verified live**.
 
 ## Phase 4 — Reconnect Hardening
 

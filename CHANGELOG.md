@@ -6,6 +6,31 @@ All notable changes to Vocs Pi Control are documented here. Format follows
 
 ## [Unreleased]
 
+### Added — Phase 3 (real Pi integration)
+
+- `EmbeddedPiDriver` (packages/pi-driver): wraps the official Pi SDK
+  (`createAgentSession`, pi 0.84.1) — create/resume/prompt/steer/followUp/
+  abort/compact/setModel/setThinkingLevel; persistent native sessions via
+  `SessionManager.create(cwd)` under `/state/pi-agent/sessions`; event
+  mapping tuned against the real SDK event stream (thinking deltas,
+  toolcall segments, text_start/delta/end, tool_execution_*)
+- ESM-only pi loaded from the CJS agent bundle via manual NODE_PATH/
+  node_modules resolution + direct file-URL import
+- Base image installs pinned pi under /opt/pi-control/node_modules
+- Agent session protocol: create/resume/prompt/steer/followUp/abort/
+  compact/setModel/setThinkingLevel/list; driver events forwarded as
+  protocol envelope inits (single mapping in pi-driver/events.ts)
+- Workspace sessions on the server: control-plane records + routing
+  (REST `/api/workspaces/:id/sessions[/resume]`, prompt/abort routes by
+  ownership), DB status sync from agent events
+- Provider credentials: control server forwards env keys to the agent at
+  hello (documented V1 boundary — scrubbing arrives with the credential
+  broker)
+- Verified live: real DeepSeek run inside the rootless container — bash +
+  write tools executed, `phase3-proof.txt` landed on the host, 130 text
+  deltas streamed through the browser protocol, native session resume
+  after a workspace restart recalled the earlier conversation
+
 ### Added — Phase 2 (workspace agent)
 
 - `pi-control-workspace-agent` (apps/workspace-agent): long-lived agent

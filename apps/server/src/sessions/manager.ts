@@ -7,7 +7,7 @@
  */
 
 import { schema, type Db } from "@pi-control/database";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, isNull } from "drizzle-orm";
 import {
   EVENT_TYPES,
   type EventEnvelopeInit,
@@ -122,6 +122,7 @@ export class SessionManager {
     const rows = this.db
       .select()
       .from(schema.sessions)
+      .where(isNull(schema.sessions.workspaceId))
       .orderBy(desc(schema.sessions.createdAt))
       .all();
     return rows.map(toSessionInfo);

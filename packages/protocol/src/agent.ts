@@ -25,6 +25,16 @@ export const AGENT_COMMAND_TYPES = [
   "agent.process.spawn",
   "agent.process.kill",
   "agent.process.list",
+  "agent.session.create",
+  "agent.session.resume",
+  "agent.session.prompt",
+  "agent.session.steer",
+  "agent.session.followUp",
+  "agent.session.abort",
+  "agent.session.compact",
+  "agent.session.setModel",
+  "agent.session.setThinkingLevel",
+  "agent.session.list",
   "agent.shutdown",
 ] as const;
 
@@ -57,6 +67,45 @@ export interface AgentProcessSpawnRequest {
   env?: Record<string, string>;
 }
 
+export interface AgentSessionCreateRequest {
+  /** Control-plane session id (server-generated, browser-facing). */
+  sessionId: string;
+  title?: string;
+  model?: string;
+  thinkingLevel?: string;
+  /** Provider credential env vars (V1 boundary — scrubbing is Phase 7+). */
+  env?: Record<string, string>;
+}
+
+export interface AgentSessionResumeRequest {
+  sessionId: string;
+  nativeSessionPath: string;
+  env?: Record<string, string>;
+}
+
+export interface AgentSessionPromptRequest {
+  sessionId: string;
+  text: string;
+}
+
+export interface AgentSessionControlRequest {
+  sessionId: string;
+  model?: string;
+  level?: string;
+}
+
+export interface AgentSessionInfo {
+  sessionId: string;
+  nativePiSessionId?: string;
+  nativePiSessionPath?: string;
+  /** Native session file (for resume). */
+  sessionFile?: string;
+  title: string;
+  status: string;
+  model?: string;
+  thinkingLevel?: string;
+}
+
 /* ------------------------------------------------------------------ */
 /* Agent -> server events                                              */
 /* ------------------------------------------------------------------ */
@@ -71,6 +120,9 @@ export const AGENT_EVENT_TYPES = [
   "agent.process.output",
   "agent.process.exited",
   "agent.process.list",
+  "agent.session.created",
+  "agent.session.event",
+  "agent.session.list",
   "agent.error",
 ] as const;
 
@@ -86,6 +138,8 @@ export interface AgentReadyPayload {
   agentVersion: string;
   protocolVersion: number;
   processes: AgentProcessInfo[];
+  /** Live Pi sessions (re-synced on reconnect). */
+  sessions?: AgentSessionInfo[];
 }
 
 export interface AgentHealthPayload {
@@ -148,6 +202,35 @@ export interface AgentProcessExitedPayload {
 export interface AgentProcessListPayload {
   processes: AgentProcessInfo[];
   /** Present when this event is the response to an agent.process.list command. */
+  commandId?: string;
+}
+
+export interface AgentSessionCreatedPayload {
+  sessionId: string;
+  nativePiSessionId?: string;
+  nativePiSessionPath?: string;
+  model?: string;
+  thinkingLevel?: string;
+  commandId?: string;
+}
+
+/**
+ * A normalized Pi driver event forwarded as a protocol envelope init.
+ * The server publishes it with a sequence number (single mapping lives in
+ * packages/pi-driver/src/events.ts).
+ */
+export interface AgentSessionEventPayload {
+  sessionId: string;
+  envelope: {
+    scope: "session";
+    sessionId: string;
+    type: string;
+    payload: unknown;
+  };
+}
+
+export interface AgentSessionListPayload {
+  sessions: AgentSessionInfo[];
   commandId?: string;
 }
 

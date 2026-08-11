@@ -24,15 +24,20 @@ import {
   type AgentHealthPayload,
   type AgentProcessInfo,
 } from "@pi-control/protocol";
+import { MockPiDriver } from "@pi-control/pi-driver/mock";
+import { EmbeddedPiDriver } from "@pi-control/pi-driver/embedded";
 import { AGENT_VERSION, type AgentConfig } from "./config.js";
 import { runExec, toExitPayload } from "./exec.js";
 import { ProcessSupervisor } from "./processSupervisor.js";
+import { SessionSupervisor } from "./sessionSupervisor.js";
 
 export interface AgentServerOptions {
   config: AgentConfig;
   logger: (message: string, meta?: Record<string, unknown>) => void;
   /** For tests: skip the token requirement. */
   skipAuth?: boolean;
+  /** Override the Pi driver (tests use the mock). */
+  driver?: ReturnType<typeof createPiDriver>;
 }
 
 export interface AgentServerHandle {
@@ -52,14 +57,17 @@ export async function startAgentServer(options: AgentServerOptions): Promise<Age
   const { config, logger } = options;
   const httpServer = createServer();
   const wss = new WebSocketServer({ server: httpServer, maxPayload: 4 * 1024 * 1024 });
-
-  const supervisor = new ProcessSupervisor({
+  const processSupervisor = new ProcessSupervisor({
     onStarted: (process: AgentProcessInfo) => broadcast({ type: "agent.process.started", payload: { process } }),
     onOutput: (payload) => broadcast({ type: "agent.process.output", payload }),
     onExited: (processId, exitCode) => broadcast({ type: "agent.process.exited", payload: { processId, exitCode } }),
   });
 
   const clients = new Set<WebSocket>();
+
+  const sessionSupervisor = new SessionSupervisor(options.driver ?? createPiDriver(logger), {
+    onEvent: (sessionId, envelope) => broadcast({ type: "agent.session.event", payload: { sessionId, envelope } }),
+  });
 
   const broadcast = (event: AgentEvent): void => {
     for (const client of clients) {
@@ -77,7 +85,7 @@ export async function startAgentServer(options: AgentServerOptions): Promise<Age
       heapUsedBytes: process.memoryUsage().heapUsed,
     },
     cpuPercent: cpuPercent(),
-    processCount: supervisor.count(),
+    processCount: processSupervisor.count(),
     agentVersion: AGENT_VERSION,
   });
 
@@ -105,7 +113,7 @@ export async function startAgentServer(options: AgentServerOptions): Promise<Age
           workspaceId: config.workspaceId,
           agentVersion: AGENT_VERSION,
           protocolVersion: AGENT_PROTOCOL_VERSION,
-          processes: supervisor.list(),
+          processes: processSupervisor.list(),
         },
       } satisfies AgentEvent),
     );
@@ -124,7 +132,15 @@ export async function startAgentServer(options: AgentServerOptions): Promise<Age
     try {
       switch (command.type) {
         case "agent.hello": {
-          const payload = command.payload as { workspaceId?: string };
+          const payload = command.payload as { workspaceId?: string; env?: Record<string, string> };
+          // V1 credential boundary: the control server supplies provider
+          // env vars; apply them process-wide for Pi (ADR-0010 documents
+          // that child shells inherit these until a credential broker lands).
+          if (payload.env) {
+            for (const [key, value] of Object.entries(payload.env)) {
+              if (value) process.env[key] = value;
+            }
+          }
           socket.send(
             JSON.stringify({
               type: "agent.ready",
@@ -132,7 +148,8 @@ export async function startAgentServer(options: AgentServerOptions): Promise<Age
                 workspaceId: payload.workspaceId ?? config.workspaceId,
                 agentVersion: AGENT_VERSION,
                 protocolVersion: AGENT_PROTOCOL_VERSION,
-                processes: supervisor.list(),
+                processes: processSupervisor.list(),
+                sessions: sessionSupervisor.list(),
               },
             } satisfies AgentEvent),
           );
@@ -154,7 +171,7 @@ export async function startAgentServer(options: AgentServerOptions): Promise<Age
         }
         case "agent.process.spawn": {
           const request = command.payload as Parameters<ProcessSupervisor["spawn"]>[0];
-          const process = supervisor.spawn(request);
+          const process = processSupervisor.spawn(request);
           socket.send(
             JSON.stringify({
               type: "agent.process.started",
@@ -165,7 +182,7 @@ export async function startAgentServer(options: AgentServerOptions): Promise<Age
         }
         case "agent.process.kill": {
           const { processId } = command.payload as { processId: string };
-          supervisor.kill(processId);
+          processSupervisor.kill(processId);
           socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } } satisfies AgentEvent));
           return;
         }
@@ -173,15 +190,86 @@ export async function startAgentServer(options: AgentServerOptions): Promise<Age
           socket.send(
             JSON.stringify({
               type: "agent.process.list",
-              payload: { processes: supervisor.list(), commandId: command.id },
+              payload: { processes: processSupervisor.list(), commandId: command.id },
             } satisfies AgentEvent),
           );
           return;
         }
         case "agent.shutdown": {
-          supervisor.shutdown();
+          processSupervisor.shutdown();
           socket.send(JSON.stringify({ type: "agent.error", payload: { message: "shutting down" } } satisfies AgentEvent));
           socket.close();
+          return;
+        }
+        case "agent.session.create": {
+          const request = command.payload as { sessionId: string; title?: string; model?: string; thinkingLevel?: string };
+          const info = await sessionSupervisor.create(request.sessionId, {
+            title: request.title,
+            model: request.model,
+            thinkingLevel: request.thinkingLevel,
+          });
+          socket.send(
+            JSON.stringify({
+              type: "agent.session.created",
+              payload: { ...info, commandId: command.id },
+            } satisfies AgentEvent),
+          );
+          return;
+        }
+        case "agent.session.resume": {
+          const request = command.payload as { sessionId: string; nativeSessionPath: string };
+          const info = await sessionSupervisor.resume(request.sessionId, request.nativeSessionPath);
+          socket.send(
+            JSON.stringify({ type: "agent.session.created", payload: { ...info, commandId: command.id } } satisfies AgentEvent),
+          );
+          return;
+        }
+        case "agent.session.prompt": {
+          const request = command.payload as { sessionId: string; text: string };
+          await sessionSupervisor.prompt(request.sessionId, request.text);
+          socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } } satisfies AgentEvent));
+          return;
+        }
+        case "agent.session.steer": {
+          const request = command.payload as { sessionId: string; text: string };
+          await sessionSupervisor.steer(request.sessionId, request.text);
+          socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } } satisfies AgentEvent));
+          return;
+        }
+        case "agent.session.followUp": {
+          const request = command.payload as { sessionId: string; text: string };
+          await sessionSupervisor.followUp(request.sessionId, request.text);
+          socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } } satisfies AgentEvent));
+          return;
+        }
+        case "agent.session.abort": {
+          const request = command.payload as { sessionId: string };
+          await sessionSupervisor.abort(request.sessionId);
+          socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } } satisfies AgentEvent));
+          return;
+        }
+        case "agent.session.compact": {
+          const request = command.payload as { sessionId: string };
+          await sessionSupervisor.compact(request.sessionId);
+          socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } } satisfies AgentEvent));
+          return;
+        }
+        case "agent.session.setModel": {
+          const request = command.payload as { sessionId: string; model: string };
+          await sessionSupervisor.setModel(request.sessionId, request.model);
+          socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } } satisfies AgentEvent));
+          return;
+        }
+        case "agent.session.setThinkingLevel": {
+          const request = command.payload as { sessionId: string; level: string };
+          await sessionSupervisor.setThinkingLevel(request.sessionId, request.level);
+          socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } } satisfies AgentEvent));
+          return;
+        }
+        case "agent.session.list": {
+          socket.send(
+            JSON.stringify({ type: "agent.session.list", payload: { sessions: sessionSupervisor.list(), commandId: command.id } } satisfies AgentEvent),
+          );
           return;
         }
       }
@@ -209,12 +297,26 @@ export async function startAgentServer(options: AgentServerOptions): Promise<Age
   return {
     async close() {
       clearInterval(healthTimer);
-      supervisor.shutdown();
+      await sessionSupervisor.shutdown();
       for (const client of clients) client.close();
       await new Promise<void>((resolve) => httpServer.close(() => resolve()));
     },
     connectionCount: () => clients.size,
   };
+}
+
+function createPiDriver(logger: (message: string, meta?: Record<string, unknown>) => void) {
+  const mode = process.env.PI_CONTROL_PI_DRIVER ?? "embedded";
+  if (mode === "mock") {
+    logger(`using MockPiDriver (PI_CONTROL_PI_DRIVER=${mode})`);
+    return new MockPiDriver({ speedMs: 40 });
+  }
+  logger(`using EmbeddedPiDriver (real Pi SDK; cwd=/workspace agentDir=/state/pi-agent)`);
+  return new EmbeddedPiDriver({
+    cwd: "/workspace",
+    agentDir: "/state/pi-agent",
+    sessionDir: "/state/pi-sessions",
+  });
 }
 
 let lastCpuSample: { time: number; usage: NodeJS.CpuUsage } | null = null;

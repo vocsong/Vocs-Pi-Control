@@ -10,8 +10,12 @@ import { MockPiDriver } from "@pi-control/pi-driver/mock";
 import { loadConfig, APP_VERSION } from "./config.js";
 import { createLogger } from "./logger.js";
 import { openDatabase, ensureLocalMachine } from "./db.js";
+import { schema } from "@pi-control/database";
+import { eq } from "drizzle-orm";
+import { nowIso } from "@pi-control/shared";
 import { RealtimeHub } from "./realtime/hub.js";
 import { SessionManager } from "./sessions/manager.js";
+import { WorkspaceSessionManager } from "./sessions/workspaceSessions.js";
 import { SandboxManager } from "./sandbox/manager.js";
 import { selectRuntime } from "./sandbox/runtimeFactory.js";
 import { AgentManager } from "./agents/agentManager.js";
@@ -31,7 +35,19 @@ async function main(): Promise<void> {
 
   const hub = new RealtimeHub(logger);
   const sessions = new SessionManager(db, hub, () => new MockPiDriver({ speedMs: 60 }), logger);
-  const agents = new AgentManager(hub, logger);
+  // Keep workspace session statuses in the control plane in sync with agent events.
+  const agents = new AgentManager(hub, logger, (sessionId, envelope) => {
+    if (envelope.type === "session.state") {
+      const status = (envelope.payload as { status?: string }).status;
+      if (status) {
+        db.update(schema.sessions)
+          .set({ status, updatedAt: nowIso(), lastActivityAt: nowIso() })
+          .where(eq(schema.sessions.id, sessionId))
+          .run();
+      }
+    }
+  });
+  const workspaceSessions = new WorkspaceSessionManager(db, agents, hub, logger);
 
   const { runtime, detection, reason } = await selectRuntime(logger, process.env);
   logger.info({ runtime: runtime.name, reason, messages: detection.messages }, "sandbox runtime selected");
@@ -48,7 +64,7 @@ async function main(): Promise<void> {
   sandbox.restoreAgents();
   await sandbox.refreshDetection();
 
-  const app = await buildApp({ logger, db, hub, sessions, sandbox, agents, runtimeName: runtime.name });
+  const app = await buildApp({ logger, db, hub, sessions, workspaceSessions, sandbox, agents, runtimeName: runtime.name });
 
   try {
     await app.listen({ host: config.host, port: config.port });

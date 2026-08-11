@@ -9,12 +9,14 @@ import { z } from "zod";
 import { CLIENT_COMMAND_TYPES, EVENT_TYPES, type ClientCommand } from "@pi-control/protocol";
 import type { RealtimeHub, SocketLike } from "./hub.js";
 import type { SessionManager } from "../sessions/manager.js";
+import type { WorkspaceSessionManager } from "../sessions/workspaceSessions.js";
 import type { Logger } from "../logger.js";
 import type { AppFastify } from "../types.js";
 
 export interface RealtimeDeps {
   hub: RealtimeHub;
   sessions: SessionManager;
+  workspaceSessions: WorkspaceSessionManager;
   logger: Logger;
 }
 
@@ -85,7 +87,7 @@ async function handleMessage(socket: SocketLike, raw: string, deps: RealtimeDeps
 }
 
 async function execute(command: ClientCommand, socket: SocketLike, deps: RealtimeDeps): Promise<void> {
-  const { hub, sessions } = deps;
+  const { hub, sessions, workspaceSessions } = deps;
   switch (command.type) {
     case "health.ping": {
       hub.ack(socket, command.id);
@@ -99,13 +101,21 @@ async function execute(command: ClientCommand, socket: SocketLike, deps: Realtim
     }
     case "session.prompt": {
       const payload = promptSchema.parse(command.payload);
-      await sessions.prompt(payload.sessionId, payload.text);
+      if (workspaceSessions.owns(payload.sessionId)) {
+        await workspaceSessions.prompt(payload.sessionId, payload.text);
+      } else {
+        await sessions.prompt(payload.sessionId, payload.text);
+      }
       hub.ack(socket, command.id);
       return;
     }
     case "session.abort": {
       const payload = sessionIdSchema.parse(command.payload);
-      await sessions.abort(payload.sessionId);
+      if (workspaceSessions.owns(payload.sessionId)) {
+        await workspaceSessions.abort(payload.sessionId);
+      } else {
+        await sessions.abort(payload.sessionId);
+      }
       hub.ack(socket, command.id);
       return;
     }

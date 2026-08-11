@@ -21,6 +21,9 @@ await build({
   target: "node22",
   outfile,
   banner: { js: "#!/usr/bin/env node" },
+  // The Pi SDK is ESM-only and installed in the image; the agent loads it
+  // lazily via runtime import() (see packages/pi-driver/src/embedded.ts).
+  external: ["@earendil-works/pi-coding-agent"],
   logLevel: "info",
 });
 

@@ -3733,8 +3733,589 @@ var AGENT_COMMAND_TYPES = [
   "agent.process.spawn",
   "agent.process.kill",
   "agent.process.list",
+  "agent.session.create",
+  "agent.session.resume",
+  "agent.session.prompt",
+  "agent.session.steer",
+  "agent.session.followUp",
+  "agent.session.abort",
+  "agent.session.compact",
+  "agent.session.setModel",
+  "agent.session.setThinkingLevel",
+  "agent.session.list",
   "agent.shutdown"
 ];
+
+// ../../packages/protocol/src/index.ts
+var EVENT_TYPES = {
+  sessionCreated: "session.created",
+  sessionState: "session.state",
+  sessionError: "session.error",
+  sessionClosed: "session.closed",
+  userMessage: "user.message",
+  assistantStart: "assistant.start",
+  assistantDelta: "assistant.delta",
+  assistantEnd: "assistant.end",
+  thinkingStart: "thinking.start",
+  thinkingDelta: "thinking.delta",
+  thinkingEnd: "thinking.end",
+  toolStart: "tool.start",
+  toolUpdate: "tool.update",
+  toolEnd: "tool.end",
+  toolError: "tool.error",
+  modelUpdated: "model.updated",
+  usageUpdated: "usage.updated",
+  projectCreated: "project.created",
+  workspaceCreated: "workspace.created",
+  workspaceState: "workspace.state",
+  workspaceError: "workspace.error",
+  sandboxStatus: "sandbox.status",
+  sandboxPrepare: "sandbox.prepare",
+  sandboxSelfTest: "sandbox.selftest",
+  agentState: "agent.state",
+  agentHealth: "agent.health",
+  processStarted: "process.started",
+  processOutput: "process.output",
+  processExited: "process.exited",
+  commandAck: "command.ack",
+  commandError: "command.error",
+  commandDuplicate: "command.duplicate",
+  replayComplete: "replay.complete"
+};
+
+// ../../packages/shared/src/index.ts
+function newId(prefix) {
+  return `${prefix}_${globalThis.crypto.randomUUID()}`;
+}
+function nowIso() {
+  return (/* @__PURE__ */ new Date()).toISOString();
+}
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// ../../packages/pi-driver/src/mock.ts
+var SCRIPT_REPLY = `I've processed your request and completed the simulated work cycle:
+
+1. **Analyzed** the request and the current workspace state.
+2. **Ran** the project test suite to establish a baseline.
+3. **Reviewed** the results and summarized the findings below.
+
+### Summary
+
+Your request was: "%s"
+
+Everything executed inside the workspace sandbox \u2014 no host filesystem
+access was involved (this is the mock driver; the real Pi driver lands in
+Phase 3). Files changed by this session are visible to other sessions in
+the same workspace.`;
+var THINKING_SCRIPT = [
+  "The user wants me to handle a request. Let me break it down.",
+  "First I should check what state the workspace is in.",
+  "I'll run the test suite to get a baseline, then summarize."
+];
+var MockPiDriver = class {
+  sessions = /* @__PURE__ */ new Map();
+  speedMs;
+  constructor(options = {}) {
+    this.speedMs = options.speedMs ?? 120;
+  }
+  async create(options = {}) {
+    const id = newId("mock-pi");
+    const handle = {
+      id,
+      status: "idle",
+      model: options.model ?? "mock-model",
+      thinkingLevel: options.thinkingLevel ?? "medium"
+    };
+    this.sessions.set(id, {
+      handle,
+      listeners: /* @__PURE__ */ new Set(),
+      running: false,
+      abortRequested: false,
+      lastActivityAt: Date.now(),
+      failNext: false
+    });
+    return handle;
+  }
+  async resume(nativeSessionIdOrPath) {
+    const id = newId("mock-pi");
+    const handle = {
+      id,
+      status: "idle",
+      model: "mock-model",
+      thinkingLevel: "medium"
+    };
+    this.sessions.set(id, {
+      handle,
+      listeners: /* @__PURE__ */ new Set(),
+      running: false,
+      abortRequested: false,
+      lastActivityAt: Date.now(),
+      failNext: false
+    });
+    this.emit(id, {
+      type: "state",
+      status: "idle"
+    });
+    void nativeSessionIdOrPath;
+    return handle;
+  }
+  async prompt(sessionId, input) {
+    const session = this.require(sessionId);
+    if (session.running) {
+      await this.waitForIdle(session);
+    }
+    session.running = true;
+    session.abortRequested = false;
+    session.lastActivityAt = Date.now();
+    const userMessageId = newId("msg");
+    this.emit(sessionId, {
+      type: "user.message",
+      messageId: userMessageId,
+      content: input.text,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    this.emit(sessionId, { type: "state", status: "running" });
+    await this.runScript(sessionId, input);
+  }
+  async steer(sessionId, input) {
+    await this.prompt(sessionId, input);
+  }
+  async followUp(sessionId, input) {
+    await this.prompt(sessionId, input);
+  }
+  async abort(sessionId) {
+    const session = this.require(sessionId);
+    if (!session.running) return;
+    session.abortRequested = true;
+    session.running = false;
+    session.handle.status = "stopped";
+    this.emit(sessionId, { type: "state", status: "stopped" });
+    this.emit(sessionId, { type: "closed", reason: "aborted" });
+  }
+  async compact(sessionId) {
+    this.require(sessionId);
+  }
+  async setModel(sessionId, model) {
+    const session = this.require(sessionId);
+    session.handle.model = model.id;
+    this.emit(sessionId, { type: "model.updated", model: model.id });
+  }
+  async setThinkingLevel(sessionId, level) {
+    const session = this.require(sessionId);
+    session.handle.thinkingLevel = level;
+  }
+  async getSnapshot(sessionId) {
+    const session = this.require(sessionId);
+    return {
+      handle: { ...session.handle },
+      lastActivityAt: session.lastActivityAt,
+      usage: { tokensIn: 1234, tokensOut: 890, contextPercent: 62, costUsd: 42e-4 }
+    };
+  }
+  subscribe(sessionId, listener) {
+    const session = this.require(sessionId);
+    session.listeners.add(listener);
+    return () => {
+      session.listeners.delete(listener);
+    };
+  }
+  async dispose(sessionId) {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+    session.abortRequested = true;
+    session.running = false;
+    this.sessions.delete(sessionId);
+  }
+  /* ------------------------------------------------------------------ */
+  require(sessionId) {
+    const session = this.sessions.get(sessionId);
+    if (!session) throw new Error(`MockPiDriver: unknown session ${sessionId}`);
+    return session;
+  }
+  emit(sessionId, event) {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+    for (const listener of [...session.listeners]) {
+      listener(event);
+    }
+  }
+  async waitForIdle(session) {
+    while (session.running) {
+      await sleep(10);
+    }
+  }
+  async runScript(sessionId, input) {
+    const session = this.require(sessionId);
+    const d = this.speedMs;
+    if (!session.abortRequested) {
+      const thinkingId = newId("think");
+      this.emit(sessionId, { type: "thinking.start", messageId: thinkingId });
+      for (const chunk of THINKING_SCRIPT) {
+        if (session.abortRequested) break;
+        await sleep(d);
+        this.emit(sessionId, { type: "thinking.delta", messageId: thinkingId, text: chunk });
+      }
+      if (!session.abortRequested) this.emit(sessionId, { type: "thinking.end", messageId: thinkingId });
+    }
+    if (!session.abortRequested) {
+      const toolCallId = newId("tool");
+      this.emit(sessionId, {
+        type: "tool.start",
+        toolCallId,
+        name: "bash",
+        input: { command: "npm test" }
+      });
+      await sleep(d * 3);
+      if (session.abortRequested) return;
+      this.emit(sessionId, {
+        type: "tool.update",
+        toolCallId,
+        output: "> pi-control@0.0.0 test\n> vitest run\n\nTest Files  1 passed (1)\nTests       3 passed (3)"
+      });
+      await sleep(d * 2);
+      if (session.abortRequested) return;
+      this.emit(sessionId, {
+        type: "tool.end",
+        toolCallId,
+        output: "Test Files  1 passed (1)\nTests       3 passed (3)",
+        durationMs: d * 5
+      });
+    }
+    if (session.abortRequested) return;
+    if (session.failNext) {
+      session.failNext = false;
+      this.emit(sessionId, { type: "error", message: "Mock provider error (simulated)" });
+    } else {
+      const messageId = newId("msg");
+      this.emit(sessionId, { type: "assistant.start", messageId });
+      const full = SCRIPT_REPLY.replace("%s", input.text.trim() || "(empty prompt)");
+      const words = full.split(/(\s+)/);
+      for (const word of words) {
+        if (session.abortRequested) break;
+        await sleep(Math.max(1, Math.round(d / 6)));
+        this.emit(sessionId, { type: "assistant.delta", messageId, text: word });
+      }
+      if (!session.abortRequested) this.emit(sessionId, { type: "assistant.end", messageId });
+    }
+    if (session.abortRequested) return;
+    session.handle.status = "idle";
+    session.running = false;
+    session.lastActivityAt = Date.now();
+    this.emit(sessionId, {
+      type: "usage.updated",
+      usage: {
+        tokensIn: 1234 + Math.floor(Math.random() * 500),
+        tokensOut: 890 + Math.floor(Math.random() * 300),
+        contextPercent: Math.min(98, 62 + Math.floor(Math.random() * 10)),
+        costUsd: 42e-4 + Math.random() * 1e-3
+      }
+    });
+    this.emit(sessionId, { type: "state", status: "idle" });
+  }
+};
+
+// ../../packages/pi-driver/src/embedded.ts
+var import_node_fs = __toESM(require("node:fs"), 1);
+var import_node_url = require("node:url");
+var import_node_path = __toESM(require("node:path"), 1);
+var PI_PACKAGE = "@earendil-works/pi-coding-agent";
+async function importPi() {
+  if (typeof __dirname !== "string") {
+    return await import(PI_PACKAGE);
+  }
+  const candidates = [];
+  for (const entry of (process.env.NODE_PATH ?? "").split(import_node_path.default.delimiter).filter(Boolean)) {
+    candidates.push(import_node_path.default.join(entry, PI_PACKAGE));
+  }
+  let dir = __dirname;
+  for (let i = 0; i < 6; i++) {
+    dir = import_node_path.default.dirname(dir);
+    candidates.push(import_node_path.default.join(dir, "node_modules", PI_PACKAGE));
+  }
+  candidates.push(import_node_path.default.join("/opt/pi-control/node_modules", PI_PACKAGE));
+  for (const candidate of candidates) {
+    try {
+      if (import_node_fs.default.existsSync(import_node_path.default.join(candidate, "package.json"))) {
+        return await import((0, import_node_url.pathToFileURL)(import_node_path.default.join(candidate, "dist", "index.js")).href);
+      }
+    } catch {
+    }
+  }
+  throw new Error(
+    `Cannot locate package ${PI_PACKAGE} (NODE_PATH=${process.env.NODE_PATH ?? "<unset>"}; tried ${candidates.length} locations)`
+  );
+}
+var EmbeddedPiDriver = class {
+  constructor(options = {}) {
+    this.options = options;
+  }
+  sessions = /* @__PURE__ */ new Map();
+  pi = null;
+  modelRuntime = null;
+  piLoadError = null;
+  async piModule() {
+    if (this.pi) return this.pi;
+    if (this.piLoadError) throw new Error(this.piLoadError);
+    try {
+      const mod = await importPi();
+      this.pi = mod;
+      const credentials = this.options.credentials;
+      if (credentials) {
+        for (const [key, value] of Object.entries(credentials)) {
+          if (value) process.env[key] = value;
+        }
+      }
+      this.modelRuntime = await mod.ModelRuntime.create();
+      return mod;
+    } catch (error) {
+      this.piLoadError = `Pi SDK unavailable: ${error instanceof Error ? error.message : String(error)}`;
+      throw new Error(this.piLoadError);
+    }
+  }
+  async create(options = {}) {
+    const pi = await this.piModule();
+    const cwd = this.options.cwd ?? "/workspace";
+    const sessionId = newId("pi");
+    const model = await this.resolveModel(options.model);
+    const result = await pi.createAgentSession({
+      cwd,
+      agentDir: this.options.agentDir ?? "/state/pi-agent",
+      sessionManager: pi.SessionManager.create(cwd),
+      modelRuntime: this.modelRuntime,
+      ...model ? { model } : {},
+      ...options.thinkingLevel ? { thinkingLevel: options.thinkingLevel } : {}
+    });
+    const managed = {
+      session: result.session,
+      listeners: /* @__PURE__ */ new Set(),
+      currentAssistantMessageId: null,
+      textMessageOpen: false,
+      currentToolId: null
+    };
+    this.sessions.set(sessionId, managed);
+    result.session.subscribe((event) => this.dispatch(sessionId, event));
+    this.emit(sessionId, { type: "state", status: "idle" });
+    if (model) this.emit(sessionId, { type: "model.updated", model: model.id });
+    return {
+      id: sessionId,
+      nativePiSessionId: result.session.sessionId,
+      sessionFile: result.session.sessionFile,
+      status: "idle",
+      model: model?.id ?? result.session.model?.id,
+      thinkingLevel: options.thinkingLevel ?? result.session.thinkingLevel
+    };
+  }
+  async resume(nativeSessionIdOrPath) {
+    const pi = await this.piModule();
+    const sessionId = newId("pi");
+    const result = await pi.createAgentSession({
+      cwd: this.options.cwd ?? "/workspace",
+      agentDir: this.options.agentDir ?? "/state/pi-agent",
+      sessionManager: pi.SessionManager.open(nativeSessionIdOrPath),
+      modelRuntime: this.modelRuntime
+    });
+    const managed = {
+      session: result.session,
+      listeners: /* @__PURE__ */ new Set(),
+      currentAssistantMessageId: null,
+      textMessageOpen: false,
+      currentToolId: null
+    };
+    this.sessions.set(sessionId, managed);
+    result.session.subscribe((event) => this.dispatch(sessionId, event));
+    this.emit(sessionId, { type: "state", status: "idle" });
+    return {
+      id: sessionId,
+      nativePiSessionId: result.session.sessionId,
+      sessionFile: result.session.sessionFile,
+      status: "idle",
+      model: result.session.model?.id,
+      thinkingLevel: result.session.thinkingLevel
+    };
+  }
+  async prompt(sessionId, input) {
+    const managed = this.require(sessionId);
+    if (managed.session.isStreaming) {
+      await managed.session.followUp(input.text);
+      return;
+    }
+    await managed.session.prompt(input.text);
+  }
+  async steer(sessionId, input) {
+    const managed = this.require(sessionId);
+    await managed.session.steer(input.text);
+  }
+  async followUp(sessionId, input) {
+    const managed = this.require(sessionId);
+    await managed.session.followUp(input.text);
+  }
+  async abort(sessionId) {
+    const managed = this.require(sessionId);
+    await managed.session.abort();
+    this.emit(sessionId, { type: "state", status: "stopped" });
+    this.emit(sessionId, { type: "closed", reason: "aborted" });
+  }
+  async compact(sessionId) {
+    const managed = this.require(sessionId);
+    await managed.session.compact();
+  }
+  async setModel(sessionId, model) {
+    const managed = this.require(sessionId);
+    const resolved = await this.resolveModel(model.id);
+    if (!resolved) throw new Error(`Model not found: ${model.id}`);
+    await managed.session.setModel(resolved);
+    this.emit(sessionId, { type: "model.updated", model: model.id });
+  }
+  async setThinkingLevel(sessionId, level) {
+    const managed = this.require(sessionId);
+    managed.session.setThinkingLevel(level);
+  }
+  async getSnapshot(sessionId) {
+    const managed = this.require(sessionId);
+    const session = managed.session;
+    return {
+      handle: {
+        id: sessionId,
+        nativePiSessionId: session.sessionId,
+        status: session.isStreaming ? "running" : "idle",
+        model: session.model?.id,
+        thinkingLevel: session.thinkingLevel
+      },
+      lastActivityAt: Date.now(),
+      usage: { tokensIn: session.agent.state.messages.length }
+    };
+  }
+  subscribe(sessionId, listener) {
+    const managed = this.require(sessionId);
+    managed.listeners.add(listener);
+    return () => {
+      managed.listeners.delete(listener);
+    };
+  }
+  async dispose(sessionId) {
+    const managed = this.sessions.get(sessionId);
+    if (!managed) return;
+    managed.session.dispose();
+    this.sessions.delete(sessionId);
+  }
+  /* ------------------------------------------------------------------ */
+  require(sessionId) {
+    const managed = this.sessions.get(sessionId);
+    if (!managed) throw new Error(`EmbeddedPiDriver: unknown session ${sessionId}`);
+    return managed;
+  }
+  emit(sessionId, event) {
+    const managed = this.sessions.get(sessionId);
+    if (!managed) return;
+    for (const listener of [...managed.listeners]) listener(event);
+  }
+  async resolveModel(ref) {
+    if (!ref || !this.modelRuntime) return void 0;
+    const [provider, id] = ref.split("/");
+    if (!provider || !id) return void 0;
+    return this.modelRuntime.getModel(provider, id);
+  }
+  dispatch(sessionId, event) {
+    const managed = this.sessions.get(sessionId);
+    if (!managed) return;
+    const idFor = () => managed.currentAssistantMessageId ?? "msg";
+    switch (event.type) {
+      case "agent_start":
+        this.emit(sessionId, { type: "state", status: "running" });
+        return;
+      case "agent_end":
+      case "agent_settled":
+        this.emit(sessionId, { type: "state", status: "idle" });
+        return;
+      case "message_start": {
+        const role = event.message?.role;
+        if (role === "assistant") {
+          managed.currentAssistantMessageId = event.message?.id ?? newId("msg");
+        }
+        return;
+      }
+      case "message_update": {
+        const update = event.assistantMessageEvent;
+        switch (update.type) {
+          case "text_start": {
+            managed.currentAssistantMessageId = event.messageId ?? managed.currentAssistantMessageId ?? newId("msg");
+            managed.textMessageOpen = true;
+            this.emit(sessionId, { type: "assistant.start", messageId: idFor() });
+            return;
+          }
+          case "text_delta":
+            if (!managed.textMessageOpen) {
+              managed.currentAssistantMessageId = event.messageId ?? managed.currentAssistantMessageId ?? newId("msg");
+              managed.textMessageOpen = true;
+              this.emit(sessionId, { type: "assistant.start", messageId: idFor() });
+            }
+            this.emit(sessionId, { type: "assistant.delta", messageId: idFor(), text: update.delta });
+            return;
+          case "text_end":
+            this.emit(sessionId, { type: "assistant.end", messageId: idFor() });
+            managed.textMessageOpen = false;
+            return;
+          case "thinking_start":
+            this.emit(sessionId, { type: "thinking.start", messageId: idFor() });
+            return;
+          case "thinking_delta":
+            this.emit(sessionId, { type: "thinking.delta", messageId: idFor(), text: update.delta });
+            return;
+          case "thinking_end":
+            this.emit(sessionId, { type: "thinking.end", messageId: idFor() });
+            return;
+          default:
+            return;
+        }
+      }
+      case "message_end": {
+        return;
+      }
+      case "tool_execution_start": {
+        const toolCallId = event.toolCallId ?? newId("tool");
+        managed.currentToolId = toolCallId;
+        this.emit(sessionId, {
+          type: "tool.start",
+          toolCallId,
+          name: event.toolName,
+          input: event.input
+        });
+        return;
+      }
+      case "tool_execution_update": {
+        const output = event.output;
+        this.emit(sessionId, {
+          type: "tool.update",
+          toolCallId: managed.currentToolId ?? newId("tool"),
+          output: typeof output === "string" ? output : output === void 0 ? void 0 : JSON.stringify(output)
+        });
+        return;
+      }
+      case "tool_execution_end": {
+        const toolCallId = managed.currentToolId ?? newId("tool");
+        if (event.isError) {
+          this.emit(sessionId, {
+            type: "tool.error",
+            toolCallId,
+            error: typeof event.result === "string" ? event.result : JSON.stringify(event.result ?? {})
+          });
+        } else {
+          this.emit(sessionId, {
+            type: "tool.end",
+            toolCallId,
+            output: typeof event.result === "string" ? event.result : JSON.stringify(event.result ?? {}),
+            durationMs: 0
+          });
+        }
+        return;
+      }
+      default:
+        return;
+    }
+  }
+};
 
 // src/exec.ts
 var import_node_child_process = require("node:child_process");
@@ -3807,16 +4388,6 @@ function toExitPayload(commandId, result) {
 
 // src/processSupervisor.ts
 var import_node_child_process2 = require("node:child_process");
-
-// ../../packages/shared/src/index.ts
-function newId(prefix) {
-  return `${prefix}_${globalThis.crypto.randomUUID()}`;
-}
-function nowIso() {
-  return (/* @__PURE__ */ new Date()).toISOString();
-}
-
-// src/processSupervisor.ts
 var OUTPUT_RING_BUFFER_LINES = 200;
 var ProcessSupervisor = class {
   constructor(events) {
@@ -3916,6 +4487,154 @@ var ProcessSupervisor = class {
   }
 };
 
+// ../../packages/pi-driver/src/events.ts
+function driverEventToEnvelope(sessionId, event) {
+  const base = { scope: "session", sessionId };
+  switch (event.type) {
+    case "user.message":
+      return {
+        ...base,
+        type: EVENT_TYPES.userMessage,
+        payload: { sessionId, messageId: event.messageId, content: event.content, createdAt: event.createdAt }
+      };
+    case "assistant.start":
+    case "assistant.end":
+      return { ...base, type: event.type, payload: { sessionId, messageId: event.messageId } };
+    case "assistant.delta":
+    case "thinking.delta":
+      return { ...base, type: event.type, payload: { sessionId, messageId: event.messageId, content: event.text } };
+    case "thinking.start":
+    case "thinking.end":
+      return { ...base, type: event.type, payload: { sessionId, messageId: event.messageId } };
+    case "tool.start":
+      return {
+        ...base,
+        type: EVENT_TYPES.toolStart,
+        payload: { sessionId, toolCallId: event.toolCallId, name: event.name, input: event.input }
+      };
+    case "tool.update":
+      return { ...base, type: EVENT_TYPES.toolUpdate, payload: { sessionId, toolCallId: event.toolCallId, output: event.output } };
+    case "tool.end":
+      return {
+        ...base,
+        type: EVENT_TYPES.toolEnd,
+        payload: { sessionId, toolCallId: event.toolCallId, output: event.output, durationMs: event.durationMs }
+      };
+    case "tool.error":
+      return { ...base, type: EVENT_TYPES.toolError, payload: { sessionId, toolCallId: event.toolCallId, error: event.error } };
+    case "state":
+      return { ...base, type: EVENT_TYPES.sessionState, payload: { sessionId, status: event.status } };
+    case "model.updated":
+      return { ...base, type: EVENT_TYPES.modelUpdated, payload: { sessionId, model: event.model } };
+    case "usage.updated":
+      return { ...base, type: EVENT_TYPES.usageUpdated, payload: { sessionId, usage: event.usage } };
+    case "error":
+      return { ...base, type: EVENT_TYPES.sessionError, payload: { sessionId, message: event.message } };
+    case "closed":
+      return { ...base, type: EVENT_TYPES.sessionClosed, payload: { sessionId, reason: event.reason } };
+  }
+}
+
+// src/sessionSupervisor.ts
+var SessionSupervisor = class {
+  constructor(driver, events) {
+    this.driver = driver;
+    this.events = events;
+  }
+  sessions = /* @__PURE__ */ new Map();
+  async create(controlSessionId, options = {}) {
+    const handle = await this.driver.create({
+      title: options.title,
+      model: options.model,
+      thinkingLevel: options.thinkingLevel
+    });
+    const info = {
+      sessionId: controlSessionId,
+      nativePiSessionId: handle.nativePiSessionId,
+      sessionFile: handle.sessionFile,
+      title: options.title ?? "New session",
+      status: handle.status,
+      model: handle.model,
+      thinkingLevel: handle.thinkingLevel
+    };
+    this.register(controlSessionId, info, handle.id);
+    return { ...info };
+  }
+  async resume(controlSessionId, nativeSessionPath) {
+    const handle = await this.driver.resume(nativeSessionPath);
+    const info = {
+      sessionId: controlSessionId,
+      nativePiSessionId: handle.nativePiSessionId,
+      nativePiSessionPath: nativeSessionPath,
+      sessionFile: handle.sessionFile,
+      title: "Resumed session",
+      status: handle.status,
+      model: handle.model,
+      thinkingLevel: handle.thinkingLevel
+    };
+    this.register(controlSessionId, info, handle.id);
+    return { ...info };
+  }
+  async prompt(sessionId, text) {
+    await this.driver.prompt(this.require(sessionId), { text });
+  }
+  async steer(sessionId, text) {
+    await this.driver.steer(this.require(sessionId), { text });
+  }
+  async followUp(sessionId, text) {
+    await this.driver.followUp(this.require(sessionId), { text });
+  }
+  async abort(sessionId) {
+    await this.driver.abort(this.require(sessionId));
+  }
+  async compact(sessionId) {
+    await this.driver.compact(this.require(sessionId));
+  }
+  async setModel(sessionId, model) {
+    await this.driver.setModel(this.require(sessionId), { id: model });
+  }
+  async setThinkingLevel(sessionId, level) {
+    await this.driver.setThinkingLevel(this.require(sessionId), level);
+  }
+  async dispose(sessionId) {
+    const managed = this.sessions.get(sessionId);
+    if (!managed) return;
+    managed.unsubscribe();
+    await this.driver.dispose(managed.driverSessionId);
+    this.sessions.delete(sessionId);
+  }
+  list() {
+    return [...this.sessions.values()].map((m) => ({ ...m.info }));
+  }
+  count() {
+    return this.sessions.size;
+  }
+  /** Dispose everything (agent shutdown). */
+  async shutdown() {
+    for (const sessionId of [...this.sessions.keys()]) {
+      await this.dispose(sessionId);
+    }
+  }
+  /* ------------------------------------------------------------------ */
+  register(controlSessionId, info, driverSessionId) {
+    const unsubscribe = this.driver.subscribe(driverSessionId, (event) => this.forward(controlSessionId, event));
+    this.sessions.set(controlSessionId, { info, driverSessionId, unsubscribe });
+  }
+  require(sessionId) {
+    const managed = this.sessions.get(sessionId);
+    if (!managed) throw new Error(`Unknown session ${sessionId}`);
+    return managed.driverSessionId;
+  }
+  forward(sessionId, event) {
+    const managed = this.sessions.get(sessionId);
+    if (!managed) return;
+    if (event.type === "state") managed.info.status = event.status;
+    if (event.type === "model.updated") managed.info.model = event.model;
+    const envelope = driverEventToEnvelope(sessionId, event);
+    this.events.onEvent(sessionId, envelope);
+  }
+};
+
 // src/agentServer.ts
 function timingSafeEqual(a, b) {
   const bufA = Buffer.from(a);
@@ -3927,12 +4646,15 @@ async function startAgentServer(options) {
   const { config, logger } = options;
   const httpServer = (0, import_node_http.createServer)();
   const wss = new import_websocket_server.default({ server: httpServer, maxPayload: 4 * 1024 * 1024 });
-  const supervisor = new ProcessSupervisor({
+  const processSupervisor = new ProcessSupervisor({
     onStarted: (process2) => broadcast({ type: "agent.process.started", payload: { process: process2 } }),
     onOutput: (payload) => broadcast({ type: "agent.process.output", payload }),
     onExited: (processId, exitCode) => broadcast({ type: "agent.process.exited", payload: { processId, exitCode } })
   });
   const clients = /* @__PURE__ */ new Set();
+  const sessionSupervisor = new SessionSupervisor(options.driver ?? createPiDriver(logger), {
+    onEvent: (sessionId, envelope) => broadcast({ type: "agent.session.event", payload: { sessionId, envelope } })
+  });
   const broadcast = (event) => {
     for (const client of clients) {
       if (client.readyState === client.OPEN) {
@@ -3948,7 +4670,7 @@ async function startAgentServer(options) {
       heapUsedBytes: process.memoryUsage().heapUsed
     },
     cpuPercent: cpuPercent(),
-    processCount: supervisor.count(),
+    processCount: processSupervisor.count(),
     agentVersion: AGENT_VERSION
   });
   wss.on("connection", (socket, request) => {
@@ -3972,7 +4694,7 @@ async function startAgentServer(options) {
           workspaceId: config.workspaceId,
           agentVersion: AGENT_VERSION,
           protocolVersion: AGENT_PROTOCOL_VERSION,
-          processes: supervisor.list()
+          processes: processSupervisor.list()
         }
       })
     );
@@ -3990,6 +4712,11 @@ async function startAgentServer(options) {
       switch (command.type) {
         case "agent.hello": {
           const payload = command.payload;
+          if (payload.env) {
+            for (const [key, value] of Object.entries(payload.env)) {
+              if (value) process.env[key] = value;
+            }
+          }
           socket.send(
             JSON.stringify({
               type: "agent.ready",
@@ -3997,7 +4724,8 @@ async function startAgentServer(options) {
                 workspaceId: payload.workspaceId ?? config.workspaceId,
                 agentVersion: AGENT_VERSION,
                 protocolVersion: AGENT_PROTOCOL_VERSION,
-                processes: supervisor.list()
+                processes: processSupervisor.list(),
+                sessions: sessionSupervisor.list()
               }
             })
           );
@@ -4019,7 +4747,7 @@ async function startAgentServer(options) {
         }
         case "agent.process.spawn": {
           const request = command.payload;
-          const process2 = supervisor.spawn(request);
+          const process2 = processSupervisor.spawn(request);
           socket.send(
             JSON.stringify({
               type: "agent.process.started",
@@ -4030,7 +4758,7 @@ async function startAgentServer(options) {
         }
         case "agent.process.kill": {
           const { processId } = command.payload;
-          supervisor.kill(processId);
+          processSupervisor.kill(processId);
           socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } }));
           return;
         }
@@ -4038,15 +4766,86 @@ async function startAgentServer(options) {
           socket.send(
             JSON.stringify({
               type: "agent.process.list",
-              payload: { processes: supervisor.list(), commandId: command.id }
+              payload: { processes: processSupervisor.list(), commandId: command.id }
             })
           );
           return;
         }
         case "agent.shutdown": {
-          supervisor.shutdown();
+          processSupervisor.shutdown();
           socket.send(JSON.stringify({ type: "agent.error", payload: { message: "shutting down" } }));
           socket.close();
+          return;
+        }
+        case "agent.session.create": {
+          const request = command.payload;
+          const info = await sessionSupervisor.create(request.sessionId, {
+            title: request.title,
+            model: request.model,
+            thinkingLevel: request.thinkingLevel
+          });
+          socket.send(
+            JSON.stringify({
+              type: "agent.session.created",
+              payload: { ...info, commandId: command.id }
+            })
+          );
+          return;
+        }
+        case "agent.session.resume": {
+          const request = command.payload;
+          const info = await sessionSupervisor.resume(request.sessionId, request.nativeSessionPath);
+          socket.send(
+            JSON.stringify({ type: "agent.session.created", payload: { ...info, commandId: command.id } })
+          );
+          return;
+        }
+        case "agent.session.prompt": {
+          const request = command.payload;
+          await sessionSupervisor.prompt(request.sessionId, request.text);
+          socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } }));
+          return;
+        }
+        case "agent.session.steer": {
+          const request = command.payload;
+          await sessionSupervisor.steer(request.sessionId, request.text);
+          socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } }));
+          return;
+        }
+        case "agent.session.followUp": {
+          const request = command.payload;
+          await sessionSupervisor.followUp(request.sessionId, request.text);
+          socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } }));
+          return;
+        }
+        case "agent.session.abort": {
+          const request = command.payload;
+          await sessionSupervisor.abort(request.sessionId);
+          socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } }));
+          return;
+        }
+        case "agent.session.compact": {
+          const request = command.payload;
+          await sessionSupervisor.compact(request.sessionId);
+          socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } }));
+          return;
+        }
+        case "agent.session.setModel": {
+          const request = command.payload;
+          await sessionSupervisor.setModel(request.sessionId, request.model);
+          socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } }));
+          return;
+        }
+        case "agent.session.setThinkingLevel": {
+          const request = command.payload;
+          await sessionSupervisor.setThinkingLevel(request.sessionId, request.level);
+          socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } }));
+          return;
+        }
+        case "agent.session.list": {
+          socket.send(
+            JSON.stringify({ type: "agent.session.list", payload: { sessions: sessionSupervisor.list(), commandId: command.id } })
+          );
           return;
         }
       }
@@ -4070,12 +4869,25 @@ async function startAgentServer(options) {
   return {
     async close() {
       clearInterval(healthTimer);
-      supervisor.shutdown();
+      await sessionSupervisor.shutdown();
       for (const client of clients) client.close();
       await new Promise((resolve) => httpServer.close(() => resolve()));
     },
     connectionCount: () => clients.size
   };
+}
+function createPiDriver(logger) {
+  const mode = process.env.PI_CONTROL_PI_DRIVER ?? "embedded";
+  if (mode === "mock") {
+    logger(`using MockPiDriver (PI_CONTROL_PI_DRIVER=${mode})`);
+    return new MockPiDriver({ speedMs: 40 });
+  }
+  logger(`using EmbeddedPiDriver (real Pi SDK; cwd=/workspace agentDir=/state/pi-agent)`);
+  return new EmbeddedPiDriver({
+    cwd: "/workspace",
+    agentDir: "/state/pi-agent",
+    sessionDir: "/state/pi-sessions"
+  });
 }
 var lastCpuSample = null;
 function cpuPercent() {
