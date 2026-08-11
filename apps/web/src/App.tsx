@@ -5,12 +5,17 @@ import { api, type HealthInfo } from "./api";
 import { Sidebar } from "./components/Sidebar";
 import { ChatView } from "./components/ChatView";
 import { Composer } from "./components/Composer";
+import { FilesView } from "./components/FilesView";
 import { StatusBar } from "./components/StatusBar";
+
+type Tab = "chat" | "files" | "git" | "terminal";
 
 export function App() {
   const connection = usePiControl((s) => s.connection);
   const activeSessionId = usePiControl((s) => s.activeSessionId);
+  const activeWorkspaceId = usePiControl((s) => s.activeWorkspaceId);
   const [health, setHealth] = useState<HealthInfo | null>(null);
+  const [tab, setTab] = useState<Tab>("chat");
 
   // Connect the realtime socket once.
   useEffect(() => {
@@ -97,8 +102,42 @@ export function App() {
       <div className="app-body">
         <Sidebar />
         <div className="main-column">
-          <ChatView />
-          <Composer />
+          <div className="tabbar">
+            <button className={`tab ${tab === "chat" ? "active" : ""}`} onClick={() => setTab("chat")}>
+              Chat
+            </button>
+            <button
+              className={`tab ${tab === "files" ? "active" : ""} ${!activeWorkspaceId ? "disabled" : ""}`}
+              disabled={!activeWorkspaceId}
+              onClick={() => setTab("files")}
+              title={activeWorkspaceId ? "Workspace files" : "Select a workspace first"}
+            >
+              Files
+            </button>
+            <button
+              className={`tab ${tab === "git" ? "active" : ""} ${!activeWorkspaceId ? "disabled" : ""}`}
+              disabled={!activeWorkspaceId}
+              onClick={() => setTab("git")}
+            >
+              Git
+            </button>
+            <button
+              className={`tab ${tab === "terminal" ? "active" : ""} ${!activeWorkspaceId ? "disabled" : ""}`}
+              disabled={!activeWorkspaceId}
+              onClick={() => setTab("terminal")}
+            >
+              Terminal
+            </button>
+          </div>
+          {tab === "chat" && (
+            <>
+              <ChatView />
+              <Composer />
+            </>
+          )}
+          {tab === "files" && <FilesView />}
+          {tab === "git" && <div className="tab-placeholder">Git view (Phase 7)</div>}
+          {tab === "terminal" && <div className="tab-placeholder">Terminal view (Phase 8)</div>}
         </div>
       </div>
       <StatusBar health={health} />

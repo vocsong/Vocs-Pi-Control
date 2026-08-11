@@ -40,6 +40,46 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
+  deleteSession: (sessionId: string) => json<{ ok: boolean }>(`/api/sessions/${sessionId}`, { method: "DELETE" }),
+
+  listFiles: (workspaceId: string, path = "") =>
+    json<{ entries: Array<{ name: string; path: string; type: string; size: number; mtimeMs: number }> }>(
+      `/api/workspaces/${workspaceId}/files?path=${encodeURIComponent(path)}`,
+    ),
+
+  readFile: (workspaceId: string, path: string) =>
+    json<{ file: { content: string; encoding: "utf8" | "base64"; truncated: boolean; size: number } }>(
+      `/api/workspaces/${workspaceId}/file?path=${encodeURIComponent(path)}`,
+    ),
+
+  writeFile: (workspaceId: string, path: string, content: string, encoding: "utf8" | "base64" = "utf8") =>
+    json<{ result: { ok: boolean } }>(`/api/workspaces/${workspaceId}/file`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ path, content, encoding }),
+    }),
+
+  mkdirFile: (workspaceId: string, path: string) =>
+    json<{ ok: boolean }>(`/api/workspaces/${workspaceId}/file/mkdir`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ path }),
+    }),
+
+  removeFile: (workspaceId: string, path: string, recursive = false) =>
+    json<{ ok: boolean }>(`/api/workspaces/${workspaceId}/file/remove`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ path, recursive }),
+    }),
+
+  renameFile: (workspaceId: string, from: string, to: string) =>
+    json<{ ok: boolean }>(`/api/workspaces/${workspaceId}/file/rename`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ from, to }),
+    }),
+
   listProjects: () => json<{ projects: ProjectInfo[] }>("/api/projects"),
 
   createProject: (body: { name: string; hostRootPath: string }) =>

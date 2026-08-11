@@ -28,6 +28,7 @@ import { MockPiDriver } from "@pi-control/pi-driver/mock";
 import { EmbeddedPiDriver } from "@pi-control/pi-driver/embedded";
 import { AGENT_VERSION, type AgentConfig } from "./config.js";
 import { runExec, toExitPayload } from "./exec.js";
+import { FileService } from "./fileService.js";
 import { ProcessSupervisor } from "./processSupervisor.js";
 import { SessionSupervisor } from "./sessionSupervisor.js";
 
@@ -68,6 +69,7 @@ export async function startAgentServer(options: AgentServerOptions): Promise<Age
   const sessionSupervisor = new SessionSupervisor(options.driver ?? createPiDriver(logger), {
     onEvent: (sessionId, envelope) => broadcast({ type: "agent.session.event", payload: { sessionId, envelope } }),
   });
+  const files = new FileService(process.env.PI_CONTROL_WORKSPACE_ROOT ?? "/workspace");
 
   const broadcast = (event: AgentEvent): void => {
     for (const client of clients) {
@@ -275,6 +277,60 @@ export async function startAgentServer(options: AgentServerOptions): Promise<Age
         case "agent.session.list": {
           socket.send(
             JSON.stringify({ type: "agent.session.list", payload: { sessions: sessionSupervisor.list(), commandId: command.id } } satisfies AgentEvent),
+          );
+          return;
+        }
+        case "agent.file.list": {
+          const request = command.payload as { path?: string };
+          const entries = await files.list(request.path ?? "");
+          socket.send(
+            JSON.stringify({ type: "agent.file.list", payload: { entries, commandId: command.id } } satisfies AgentEvent),
+          );
+          return;
+        }
+        case "agent.file.read": {
+          const request = command.payload as { path: string; maxBytes?: number };
+          const result = await files.read(request.path, request.maxBytes);
+          socket.send(
+            JSON.stringify({
+              type: "agent.file.read",
+              payload: { path: request.path, commandId: command.id, ...result },
+            } satisfies AgentEvent),
+          );
+          return;
+        }
+        case "agent.file.write": {
+          const request = command.payload as { path: string; content: string; encoding?: "utf8" | "base64" };
+          const bytes = await files.write(request.path, request.content, request.encoding);
+          socket.send(
+            JSON.stringify({
+              type: "agent.file.ok",
+              payload: { ok: true, path: request.path, bytes, commandId: command.id },
+            } satisfies AgentEvent),
+          );
+          return;
+        }
+        case "agent.file.mkdir": {
+          const request = command.payload as { path: string; recursive?: boolean };
+          await files.mkdir(request.path, request.recursive ?? true);
+          socket.send(
+            JSON.stringify({ type: "agent.file.ok", payload: { ok: true, path: request.path, commandId: command.id } } satisfies AgentEvent),
+          );
+          return;
+        }
+        case "agent.file.remove": {
+          const request = command.payload as { path: string; recursive?: boolean };
+          await files.remove(request.path, request.recursive ?? false);
+          socket.send(
+            JSON.stringify({ type: "agent.file.ok", payload: { ok: true, path: request.path, commandId: command.id } } satisfies AgentEvent),
+          );
+          return;
+        }
+        case "agent.file.rename": {
+          const request = command.payload as { from: string; to: string };
+          await files.rename(request.from, request.to);
+          socket.send(
+            JSON.stringify({ type: "agent.file.ok", payload: { ok: true, path: request.to, commandId: command.id } } satisfies AgentEvent),
           );
           return;
         }

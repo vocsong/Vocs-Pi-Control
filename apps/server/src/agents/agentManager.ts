@@ -171,6 +171,37 @@ export class AgentManager {
     await this.require(workspaceId).request("agent.session.dispose", { sessionId }, 10_000);
   }
 
+  async listFiles(workspaceId: string, dir = "") {
+    const event = await this.require(workspaceId).request("agent.file.list", { path: dir }, 15_000);
+    return (event.payload as { entries: unknown[] }).entries;
+  }
+
+  async readFile(workspaceId: string, filePath: string, maxBytes?: number) {
+    const event = await this.require(workspaceId).request("agent.file.read", { path: filePath, maxBytes }, 30_000);
+    return event.payload as { content: string; encoding: "utf8" | "base64"; truncated: boolean; size: number };
+  }
+
+  async writeFile(workspaceId: string, filePath: string, content: string, encoding: "utf8" | "base64" = "utf8") {
+    const event = await this.require(workspaceId).request(
+      "agent.file.write",
+      { path: filePath, content, encoding },
+      30_000,
+    );
+    return event.payload as { ok: boolean; bytes?: number };
+  }
+
+  async mkdirFile(workspaceId: string, filePath: string): Promise<void> {
+    await this.require(workspaceId).request("agent.file.mkdir", { path: filePath }, 15_000);
+  }
+
+  async removeFile(workspaceId: string, filePath: string, recursive = false): Promise<void> {
+    await this.require(workspaceId).request("agent.file.remove", { path: filePath, recursive }, 15_000);
+  }
+
+  async renameFile(workspaceId: string, from: string, to: string): Promise<void> {
+    await this.require(workspaceId).request("agent.file.rename", { from, to }, 15_000);
+  }
+
   async spawnProcess(workspaceId: string, request: AgentProcessSpawnRequest): Promise<AgentProcessInfo> {
     return this.require(workspaceId).spawnProcess(request);
   }

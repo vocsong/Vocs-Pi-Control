@@ -36,6 +36,12 @@ export const AGENT_COMMAND_TYPES = [
   "agent.session.setThinkingLevel",
   "agent.session.dispose",
   "agent.session.list",
+  "agent.file.list",
+  "agent.file.read",
+  "agent.file.write",
+  "agent.file.mkdir",
+  "agent.file.remove",
+  "agent.file.rename",
   "agent.shutdown",
 ] as const;
 
@@ -108,6 +114,72 @@ export interface AgentSessionInfo {
 }
 
 /* ------------------------------------------------------------------ */
+/* File service (Phase 6)                                              */
+/* ------------------------------------------------------------------ */
+
+export interface AgentFileEntry {
+  name: string;
+  /** Path relative to the workspace root (no leading slash). */
+  path: string;
+  type: "file" | "dir" | "symlink" | "other";
+  size: number;
+  mtimeMs: number;
+}
+
+export interface AgentFileListRequest {
+  /** Directory relative to the workspace root; empty = root. */
+  path?: string;
+}
+
+export interface AgentFileListPayload {
+  entries: AgentFileEntry[];
+  commandId?: string;
+}
+
+export interface AgentFileReadRequest {
+  path: string;
+  /** Cap returned content; larger files are truncated (or base64 for binary). */
+  maxBytes?: number;
+}
+
+export interface AgentFileReadPayload {
+  path: string;
+  content: string;
+  encoding: "utf8" | "base64";
+  truncated: boolean;
+  size: number;
+  commandId?: string;
+}
+
+export interface AgentFileWriteRequest {
+  path: string;
+  content: string;
+  encoding?: "utf8" | "base64";
+}
+
+export interface AgentFileMkdirRequest {
+  path: string;
+  recursive?: boolean;
+}
+
+export interface AgentFileRemoveRequest {
+  path: string;
+  recursive?: boolean;
+}
+
+export interface AgentFileRenameRequest {
+  from: string;
+  to: string;
+}
+
+export interface AgentFileOkPayload {
+  ok: true;
+  path: string;
+  bytes?: number;
+  commandId?: string;
+}
+
+/* ------------------------------------------------------------------ */
 /* Agent -> server events                                              */
 /* ------------------------------------------------------------------ */
 
@@ -124,6 +196,9 @@ export const AGENT_EVENT_TYPES = [
   "agent.session.created",
   "agent.session.event",
   "agent.session.list",
+  "agent.file.list",
+  "agent.file.read",
+  "agent.file.ok",
   "agent.error",
 ] as const;
 

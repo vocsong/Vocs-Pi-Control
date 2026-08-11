@@ -3742,7 +3742,14 @@ var AGENT_COMMAND_TYPES = [
   "agent.session.compact",
   "agent.session.setModel",
   "agent.session.setThinkingLevel",
+  "agent.session.dispose",
   "agent.session.list",
+  "agent.file.list",
+  "agent.file.read",
+  "agent.file.write",
+  "agent.file.mkdir",
+  "agent.file.remove",
+  "agent.file.rename",
   "agent.shutdown"
 ];
 
@@ -3750,6 +3757,8 @@ var AGENT_COMMAND_TYPES = [
 var EVENT_TYPES = {
   sessionCreated: "session.created",
   sessionState: "session.state",
+  sessionSnapshot: "session.snapshot",
+  sessionLease: "session.lease",
   sessionError: "session.error",
   sessionClosed: "session.closed",
   userMessage: "user.message",
@@ -3780,7 +3789,8 @@ var EVENT_TYPES = {
   commandAck: "command.ack",
   commandError: "command.error",
   commandDuplicate: "command.duplicate",
-  replayComplete: "replay.complete"
+  replayComplete: "replay.complete",
+  serverHello: "server.hello"
 };
 
 // ../../packages/shared/src/index.ts
@@ -4386,6 +4396,98 @@ function toExitPayload(commandId, result) {
   };
 }
 
+// src/fileService.ts
+var import_node_fs2 = __toESM(require("node:fs"), 1);
+var import_node_path2 = __toESM(require("node:path"), 1);
+var FileService = class {
+  constructor(root) {
+    this.root = root;
+  }
+  /** Resolve a user-supplied path against the workspace root. */
+  resolve(relPath) {
+    if (!relPath) return this.root;
+    if (import_node_path2.default.isAbsolute(relPath)) {
+      throw new Error(`absolute paths are not allowed: ${relPath}`);
+    }
+    const resolved = import_node_path2.default.resolve(this.root, relPath);
+    this.assertContained(resolved);
+    return resolved;
+  }
+  /** Real-path containment check (symlink-aware). */
+  assertContained(resolved) {
+    const rootReal = import_node_fs2.default.realpathSync(this.root);
+    const real = import_node_fs2.default.realpathSync(resolved);
+    if (real !== rootReal && !real.startsWith(rootReal + import_node_path2.default.sep)) {
+      throw new Error(`path escapes the workspace: ${resolved}`);
+    }
+  }
+  async list(relDir = "") {
+    const dir = this.resolve(relDir);
+    const stat = await import_node_fs2.default.promises.stat(dir);
+    if (!stat.isDirectory()) throw new Error(`not a directory: ${relDir || "/"}`);
+    const names = await import_node_fs2.default.promises.readdir(dir);
+    const entries = [];
+    for (const name of names) {
+      const abs = import_node_path2.default.join(dir, name);
+      try {
+        const st = await import_node_fs2.default.promises.lstat(abs);
+        const rel = import_node_path2.default.relative(this.root, abs).split(import_node_path2.default.sep).join("/");
+        entries.push({
+          name,
+          path: rel,
+          type: st.isDirectory() ? "dir" : st.isSymbolicLink() ? "symlink" : st.isFile() ? "file" : "other",
+          size: st.size,
+          mtimeMs: st.mtimeMs
+        });
+      } catch {
+      }
+    }
+    entries.sort((a, b) => (a.type === "dir" ? -1 : 1) - (b.type === "dir" ? -1 : 1) || a.name.localeCompare(b.name));
+    return entries;
+  }
+  async read(relPath, maxBytes = 512 * 1024) {
+    const abs = this.resolve(relPath);
+    const stat = await import_node_fs2.default.promises.stat(abs);
+    if (!stat.isFile()) throw new Error(`not a file: ${relPath}`);
+    const buffer = await import_node_fs2.default.promises.readFile(abs);
+    const truncated = buffer.length > maxBytes;
+    const slice = truncated ? buffer.subarray(0, maxBytes) : buffer;
+    let encoding = "utf8";
+    let content = slice.toString("utf8");
+    if (slice.includes(0) || content.includes("\uFFFD")) {
+      encoding = "base64";
+      content = slice.toString("base64");
+    }
+    return { content, encoding, truncated, size: buffer.length };
+  }
+  async write(relPath, content, encoding = "utf8") {
+    const abs = this.resolve(relPath);
+    const buffer = encoding === "base64" ? Buffer.from(content, "base64") : Buffer.from(content, "utf8");
+    await import_node_fs2.default.promises.mkdir(import_node_path2.default.dirname(abs), { recursive: true });
+    await import_node_fs2.default.promises.writeFile(abs, buffer);
+    return buffer.length;
+  }
+  async mkdir(relPath, recursive = true) {
+    await import_node_fs2.default.promises.mkdir(this.resolve(relPath), { recursive });
+  }
+  async remove(relPath, recursive = false) {
+    await import_node_fs2.default.promises.rm(this.resolve(relPath), { recursive });
+  }
+  async rename(from, to) {
+    const src = this.resolve(from);
+    const dst = this.resolve(to);
+    await import_node_fs2.default.promises.rename(src, dst);
+  }
+  async exists(relPath) {
+    try {
+      await import_node_fs2.default.promises.stat(this.resolve(relPath));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+};
+
 // src/processSupervisor.ts
 var import_node_child_process2 = require("node:child_process");
 var OUTPUT_RING_BUFFER_LINES = 200;
@@ -4655,6 +4757,7 @@ async function startAgentServer(options) {
   const sessionSupervisor = new SessionSupervisor(options.driver ?? createPiDriver(logger), {
     onEvent: (sessionId, envelope) => broadcast({ type: "agent.session.event", payload: { sessionId, envelope } })
   });
+  const files = new FileService(process.env.PI_CONTROL_WORKSPACE_ROOT ?? "/workspace");
   const broadcast = (event) => {
     for (const client of clients) {
       if (client.readyState === client.OPEN) {
@@ -4842,9 +4945,69 @@ async function startAgentServer(options) {
           socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } }));
           return;
         }
+        case "agent.session.dispose": {
+          const request = command.payload;
+          await sessionSupervisor.dispose(request.sessionId);
+          socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } }));
+          return;
+        }
         case "agent.session.list": {
           socket.send(
             JSON.stringify({ type: "agent.session.list", payload: { sessions: sessionSupervisor.list(), commandId: command.id } })
+          );
+          return;
+        }
+        case "agent.file.list": {
+          const request = command.payload;
+          const entries = await files.list(request.path ?? "");
+          socket.send(
+            JSON.stringify({ type: "agent.file.list", payload: { entries, commandId: command.id } })
+          );
+          return;
+        }
+        case "agent.file.read": {
+          const request = command.payload;
+          const result = await files.read(request.path, request.maxBytes);
+          socket.send(
+            JSON.stringify({
+              type: "agent.file.read",
+              payload: { path: request.path, commandId: command.id, ...result }
+            })
+          );
+          return;
+        }
+        case "agent.file.write": {
+          const request = command.payload;
+          const bytes = await files.write(request.path, request.content, request.encoding);
+          socket.send(
+            JSON.stringify({
+              type: "agent.file.ok",
+              payload: { ok: true, path: request.path, bytes, commandId: command.id }
+            })
+          );
+          return;
+        }
+        case "agent.file.mkdir": {
+          const request = command.payload;
+          await files.mkdir(request.path, request.recursive ?? true);
+          socket.send(
+            JSON.stringify({ type: "agent.file.ok", payload: { ok: true, path: request.path, commandId: command.id } })
+          );
+          return;
+        }
+        case "agent.file.remove": {
+          const request = command.payload;
+          await files.remove(request.path, request.recursive ?? false);
+          socket.send(
+            JSON.stringify({ type: "agent.file.ok", payload: { ok: true, path: request.path, commandId: command.id } })
+          );
+          return;
+        }
+        case "agent.file.rename": {
+          const request = command.payload;
+          await files.rename(request.from, request.to);
+          socket.send(
+            JSON.stringify({ type: "agent.file.ok", payload: { ok: true, path: request.to, commandId: command.id } })
           );
           return;
         }

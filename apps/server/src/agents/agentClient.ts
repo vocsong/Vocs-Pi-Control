@@ -206,6 +206,9 @@ export class AgentClient {
         return;
       case "agent.session.created":
       case "agent.session.list":
+      case "agent.file.list":
+      case "agent.file.read":
+      case "agent.file.ok":
         this.resolve((event.payload as { commandId?: string }).commandId ?? "", event);
         return;
       case "agent.exec.exit":

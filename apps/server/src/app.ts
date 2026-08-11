@@ -14,6 +14,7 @@ import { registerSessionRoutes } from "./routes/sessions.js";
 import { registerProjectRoutes } from "./routes/projects.js";
 import { registerWorkspaceRoutes } from "./routes/workspaces.js";
 import { registerSandboxRoutes } from "./routes/sandbox.js";
+import { registerFileRoutes } from "./routes/files.js";
 import type { AppFastify } from "./types.js";
 
 export interface AppDeps {
@@ -46,6 +47,7 @@ export async function buildApp(deps: AppDeps): Promise<AppFastify> {
   registerProjectRoutes(app, deps.sandbox);
   registerWorkspaceRoutes(app, deps.sandbox, deps.agents);
   registerSandboxRoutes(app, deps.sandbox);
+  registerFileRoutes(app, deps.agents);
   registerRealtime(app, deps);
 
   return app as AppFastify;
