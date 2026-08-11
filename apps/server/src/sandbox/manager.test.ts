@@ -54,16 +54,16 @@ afterEach(() => {
 });
 
 describe("SandboxManager", () => {
-  it("creates a project from a real directory", () => {
+  it("creates a project from a real directory", async () => {
     const { manager } = makeManager();
-    const project = manager.createWorkspace({ name: "app", hostRootPath: scratch });
+    const project = (await manager.createWorkspace({ name: "app", hostRootPath: scratch })).workspace;
     expect(project.id).toMatch(/^ws_/);
     expect(manager.listWorkspaces()).toHaveLength(1);
   });
 
-  it("rejects non-existent project paths", () => {
+  it("rejects non-existent project paths", async () => {
     const { manager } = makeManager();
-    expect(() => manager.createWorkspace({ name: "nope", hostRootPath: path.join(scratch, "missing") })).toThrow();
+    await expect(manager.createWorkspace({ name: "nope", hostRootPath: path.join(scratch, "missing") })).rejects.toThrow();
   });
 
   it("creates a workspace with a sandbox and walks its lifecycle", async () => {
@@ -72,22 +72,21 @@ describe("SandboxManager", () => {
     const events: string[] = [];
     hub.attach({ send: (data) => events.push((JSON.parse(data) as { type: string }).type) });
 
-    const project = manager.createWorkspace({ name: "app", hostRootPath: scratch });
-    const workspace = await manager.createSandbox(project.id, { name: "main", hostPath: scratch });
-    expect(workspace.id).toMatch(/^sbx_/);
-    expect(workspace.securityProfile).toBe("standard");
-    expect(workspace.status).toBeDefined();
+    const { workspace, sandbox } = await manager.createWorkspace({ name: "app", hostRootPath: scratch });
+    expect(sandbox.id).toMatch(/^sbx_/);
+    expect(sandbox.securityProfile).toBe("standard");
+    expect(sandbox.status).toBeDefined();
     expect(events).toContain("sandbox.created");
     expect(events).toContain("sandbox.state");
 
-    const started = await manager.startSandbox(workspace.id);
+    const started = await manager.startSandbox(sandbox.id);
     expect(started.status).toBe("running");
 
-    const stopped = await manager.stopSandbox(workspace.id);
+    const stopped = await manager.stopSandbox(sandbox.id);
     expect(stopped.status).toBe("stopped");
 
-    await manager.removeSandbox(workspace.id);
-    const after = await manager.sandboxInfo(workspace.id);
+    await manager.removeSandbox(sandbox.id);
+    const after = await manager.sandboxInfo(sandbox.id);
     expect(after.archivedAt).toBeDefined();
   });
 
@@ -107,8 +106,7 @@ describe("SandboxManager", () => {
   it("restores sandbox registrations from the database after a restart", async () => {
     const db = openTestDb();
     const first = makeManager(db).manager;
-    const project = first.createWorkspace({ name: "app", hostRootPath: scratch });
-    const sandbox = await first.createSandbox(project.id, { name: "main", hostPath: scratch });
+    const { sandbox } = await first.createWorkspace({ name: "app", hostRootPath: scratch });
     await first.startSandbox(sandbox.id);
 
     // Simulate restart: a fresh manager over the same database.

@@ -17,7 +17,7 @@ export function registerWorkspaceRoutes(app: AppFastify, manager: SandboxManager
 
   app.post("/api/workspaces", async (request, reply) => {
     const body = createWorkspaceBody.parse(request.body);
-    const workspace = manager.createWorkspace(body);
-    return reply.code(201).send({ workspace });
+    const result = await manager.createWorkspace(body);
+    return reply.code(201).send(result);
   });
 }

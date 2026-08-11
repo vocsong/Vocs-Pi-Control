@@ -82,13 +82,14 @@ export function App() {
   useEffect(() => {
     if (connection === "open" && activeSessionId) {
       const state = usePiControl.getState();
+      usePiControl.setState({ replaying: true });
       void getRealtime()
         .sendCommand("session.subscribe", {
           sessionId: activeSessionId,
           lastSeq: state.lastSeq,
         })
         .then(() => getRealtime().sendCommand("session.lease.take", { sessionId: activeSessionId }))
-        .catch(() => undefined);
+        .catch(() => usePiControl.setState({ replaying: false }));
       const heartbeat = setInterval(() => {
         const current = usePiControl.getState().activeSessionId;
         if (current) {
@@ -97,6 +98,7 @@ export function App() {
       }, 20_000);
       return () => {
         clearInterval(heartbeat);
+        usePiControl.setState({ replaying: false });
         void getRealtime().sendCommand("session.lease.release", { sessionId: activeSessionId }).catch(() => undefined);
       };
     }

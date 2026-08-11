@@ -69,6 +69,8 @@ interface PiControlState {
   selfTest: SelfTestCheckInfo[] | null;
   /** Quick-open target: a workspace-relative path to open in the Files tab. */
   requestedFile: string | null;
+  /** True while the server replays buffered events after (re)subscribe. */
+  replaying: boolean;
 
   setConnection(connection: PiControlState["connection"]): void;
   setActive(sessionId: string | null): void;
@@ -85,6 +87,10 @@ interface PiControlState {
   runSelfTest(): Promise<void>;
   setRequestedFile(path: string | null): void;
   apply(envelope: EventEnvelope): void;
+}
+
+function appendOrder(order: string[], id: string): string[] {
+  return order.includes(id) ? order : [...order, id];
 }
 
 export const usePiControl = create<PiControlState>((set, get) => ({
@@ -107,6 +113,7 @@ export const usePiControl = create<PiControlState>((set, get) => ({
   sandboxBusy: false,
   selfTest: null,
   requestedFile: null,
+  replaying: false,
 
   setConnection: (connection) => set({ connection }),
   setActive: (activeSessionId) => set({ activeSessionId }),
@@ -126,10 +133,7 @@ export const usePiControl = create<PiControlState>((set, get) => ({
       title: `Session ${Object.keys(state.sessions).length + 1}`,
     });
     const sessions = { ...get().sessions, [session.id]: session };
-    const sessionOrder = get().sessionOrder.includes(session.id)
-      ? get().sessionOrder
-      : [...get().sessionOrder, session.id];
-    set({ sessions, sessionOrder, activeSessionId: session.id });
+    set({ sessions, sessionOrder: appendOrder(get().sessionOrder, session.id), activeSessionId: session.id });
   },
 
   createWorkspaceSession: async (workspaceId) => {
@@ -137,10 +141,7 @@ export const usePiControl = create<PiControlState>((set, get) => ({
       title: `Session ${Object.keys(get().sessions).length + 1}`,
     });
     const sessions = { ...get().sessions, [session.id]: session };
-    const sessionOrder = get().sessionOrder.includes(session.id)
-      ? get().sessionOrder
-      : [...get().sessionOrder, session.id];
-    set({ sessions, sessionOrder, activeSessionId: session.id });
+    set({ sessions, sessionOrder: appendOrder(get().sessionOrder, session.id), activeSessionId: session.id });
   },
 
   createWorkspace: async (name, hostRootPath) => {
@@ -163,7 +164,7 @@ export const usePiControl = create<PiControlState>((set, get) => ({
     });
     set({
       sandboxes: { ...get().sandboxes, [sandbox.id]: sandbox },
-      sandboxOrder: [...get().sandboxOrder, sandbox.id],
+      sandboxOrder: appendOrder(get().sandboxOrder, sandbox.id),
       activeSandboxId: sandbox.id,
     });
   },
@@ -221,6 +222,17 @@ export const usePiControl = create<PiControlState>((set, get) => ({
     const state = get();
     const sessionId = envelope.sessionId;
     const items = state.items;
+    // During replay, buffered entity-created events can resurrect deleted
+    // items; the authoritative REST load covers current state instead.
+    if (state.replaying) {
+      if (
+        envelope.type === EVENT_TYPES.workspaceCreated ||
+        envelope.type === EVENT_TYPES.sandboxCreated ||
+        envelope.type === EVENT_TYPES.sessionCreated
+      ) {
+        return;
+      }
+    }
 
     const upsertSession = (info: SessionInfo) => {
       const sessions = { ...state.sessions, [info.id]: info };
@@ -463,7 +475,7 @@ export const usePiControl = create<PiControlState>((set, get) => ({
       }
       case EVENT_TYPES.replayComplete: {
         const payload = envelope.payload as { lastSeq: number };
-        set({ lastSeq: Math.max(state.lastSeq, payload.lastSeq) });
+        set({ lastSeq: Math.max(state.lastSeq, payload.lastSeq), replaying: false });
         break;
       }
     }

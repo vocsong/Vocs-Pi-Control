@@ -246,9 +246,11 @@ function WorkspaceNode({ workspace }: { workspace: WorkspaceInfo }) {
           <span className="project-name">{workspace.name}</span>
         </button>
         <span className="project-actions">
-          <button className="btn btn-icon" title="Add sandbox" onClick={() => setAdding((v) => !v)}>
-            +
-          </button>
+          {workspaceSandboxes.length === 0 && (
+            <button className="btn btn-icon" title="Create the sandbox container" onClick={() => setAdding((v) => !v)}>
+              +
+            </button>
+          )}
         </span>
       </div>
       <div className="workspace-path">{workspace.hostRootPath}</div>
@@ -333,7 +335,20 @@ export function Sidebar() {
   const createSession = usePiControl((s) => s.createSession);
   const workspaces = usePiControl((s) => s.workspaces);
   const workspaceOrder = usePiControl((s) => s.workspaceOrder);
+  const sandboxes = usePiControl((s) => s.sandboxes);
   const [addingWorkspace, setAddingWorkspace] = useState(false);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+
+  const runningSandbox = Object.values(sandboxes).find((sb) => sb.status === "running");
+
+  const newSession = async () => {
+    setSessionError(null);
+    try {
+      await createSession();
+    } catch (e) {
+      setSessionError(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   return (
     <aside className="sidebar">
@@ -362,10 +377,17 @@ export function Sidebar() {
       <div className="sidebar-section">
         <div className="sidebar-section-header">
           <span>Sessions</span>
-          <button className="btn btn-small" onClick={() => void createSession()}>
+          <button
+            className="btn btn-small"
+            disabled={!runningSandbox}
+            title={runningSandbox ? "New real Pi session in the running sandbox" : "Start a sandbox first"}
+            onClick={() => void newSession()}
+          >
             + New
           </button>
         </div>
+        {!runningSandbox && <p className="sidebar-empty">Start a sandbox (▶) to create real Pi sessions.</p>}
+        {sessionError && <div className="form-error">{sessionError}</div>}
         {sessionOrder.length === 0 ? (
           <p className="sidebar-empty">No sessions yet. Create one to start.</p>
         ) : (

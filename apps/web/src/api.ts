@@ -195,7 +195,7 @@ export const api = {
   listWorkspaces: () => json<{ workspaces: WorkspaceInfo[] }>("/api/workspaces"),
 
   createWorkspace: (body: { name: string; hostRootPath?: string }) =>
-    json<{ workspace: WorkspaceInfo }>("/api/workspaces", {
+    json<{ workspace: WorkspaceInfo; sandbox: SandboxInfo }>("/api/workspaces", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),

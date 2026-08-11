@@ -47,7 +47,7 @@ interface PiModule {
   ModelRuntime: {
     create(options?: Record<string, unknown>): Promise<{
       getModel(provider: string, id: string): unknown;
-      getAvailable(): Promise<Array<{ id: string; provider: { id: string } }>>;
+      getAvailable(): Promise<Array<{ id: string; provider: string | { id?: string } }>>;
     }>;
   };
   SessionManager: {
@@ -312,7 +312,10 @@ export class EmbeddedPiDriver implements PiSessionDriver {
     const pi = await this.piModule();
     if (!this.modelRuntime) return [];
     const available = await this.modelRuntime.getAvailable();
-    return available.map((m) => ({ provider: m.provider?.id ?? "unknown", id: m.id ?? "" })).filter((m) => m.id);
+    // pi returns provider as a STRING ("deepseek") — never "unknown".
+    return available
+      .map((m) => ({ provider: typeof m.provider === "string" ? m.provider : (m.provider?.id ?? "unknown"), id: m.id ?? "" }))
+      .filter((m) => m.id);
   }
 
   subscribe(sessionId: string, listener: PiDriverEventListener): () => void {
@@ -348,7 +351,12 @@ export class EmbeddedPiDriver implements PiSessionDriver {
     if (!ref || !this.modelRuntime) return undefined;
     const [provider, id] = ref.split("/");
     if (!provider || !id) return undefined;
-    return this.modelRuntime.getModel(provider, id) as { id: string } | undefined;
+    const direct = this.modelRuntime.getModel(provider, id) as { id: string } | undefined;
+    if (direct) return direct;
+    // Fallback: match by model id in the available catalog (handles stale
+    // refs saved under the old "unknown/<id>" provider label).
+    const available = await this.modelRuntime.getAvailable();
+    return available.find((m) => m.id === id || `${typeof m.provider === "string" ? m.provider : m.provider?.id}/${m.id}` === ref) as { id: string } | undefined;
   }
 
   private dispatch(sessionId: string, event: AgentSessionEvent): void {

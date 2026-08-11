@@ -56,6 +56,13 @@ export interface CreateWorkspaceInput {
   name: string;
   /** Optional explicit folder (must be inside the root); default: root/name. */
   hostRootPath?: string;
+  /** Worktree workspaces record their branch (plan §14). */
+  kind?: "main" | "worktree" | "directory";
+  gitBranch?: string;
+  /** Optional override for the auto-created sandbox mount (worktrees). */
+  sandboxHostPath?: string;
+  profile?: "node" | "python" | "universal";
+  securityProfile?: "standard" | "restricted" | "trusted";
 }
 
 /** Create a SANDBOX container for a workspace. */
@@ -183,10 +190,11 @@ export class SandboxManager {
   /* ------------------------------------------------------------------ */
 
   /**
-   * Create a workspace folder. Containment: the folder must live inside
-   * the workspace root (when omitted, root/<name> is used and created).
+   * Create a workspace folder AND its primary sandbox (Invariant B: one
+   * workspace owns exactly one container). Containment: the folder must
+   * live inside the workspace root (when omitted, root/<name> is created).
    */
-  createWorkspace(input: CreateWorkspaceInput): WorkspaceInfo {
+  async createWorkspace(input: CreateWorkspaceInput): Promise<{ workspace: WorkspaceInfo; sandbox: SandboxInfo }> {
     const root = this.options.rootFolder();
     let hostRootPath: string;
     if (input.hostRootPath) {
@@ -217,7 +225,18 @@ export class SandboxManager {
       payload: { workspace: toWorkspaceInfo(record) },
     });
     this.options.logger.info({ workspaceId: record.id, hostRootPath }, "workspace created");
-    return toWorkspaceInfo(record);
+
+    // Auto-create the primary sandbox (the container for this workspace).
+    const sandbox = await this.createSandbox(record.id, {
+      name: input.kind === "worktree" ? input.name : "main",
+      hostPath: input.sandboxHostPath,
+      kind: input.kind,
+      gitBranch: input.gitBranch,
+      profile: input.profile,
+      securityProfile: input.securityProfile,
+    });
+
+    return { workspace: toWorkspaceInfo(record), sandbox };
   }
 
   listWorkspaces(): WorkspaceInfo[] {
@@ -236,6 +255,15 @@ export class SandboxManager {
   async createSandbox(workspaceId: string, input: CreateSandboxInput): Promise<SandboxInfo> {
     const workspace = this.options.db.select().from(schema.projects).where(eq(schema.projects.id, workspaceId)).get();
     if (!workspace) throw new Error(`Unknown workspace ${workspaceId}`);
+
+    // Invariant B: one workspace owns exactly one primary sandbox.
+    const existing = this.options.db.select().from(schema.workspaces).where(eq(schema.workspaces.projectId, workspaceId)).get();
+    if (existing) {
+      throw new Error(
+        "Workspace already has a sandbox — one workspace owns one container (Invariant B). " +
+          "For isolated work, create a new workspace (e.g. a Git worktree).",
+      );
+    }
 
     const hostPath = input.hostPath ? fs.realpathSync(input.hostPath) : workspace.hostRootPath;
     this.assertInsideRoot(hostPath, "Sandbox folder");

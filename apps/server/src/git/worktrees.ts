@@ -62,13 +62,13 @@ export class GitWorktreeService {
       throw new Error(`git worktree add failed: ${result.stderr.trim()}`);
     }
 
-    // Create the workspace (container) for this worktree.
-    const sandbox = await this.sandbox.createSandbox(input.workspaceId, {
+    // Create the workspace folder + its primary sandbox (mounts the worktree).
+    const { sandbox } = await this.sandbox.createWorkspace({
       name: input.name,
-      hostPath: target,
-      securityProfile: "standard",
+      hostRootPath: target,
       kind: "worktree",
       gitBranch: branch,
+      sandboxHostPath: target,
     });
     this.logger.info(
       { sandboxId: sandbox.id, worktreePath: target, branch },

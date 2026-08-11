@@ -4288,10 +4288,10 @@ var EVENT_TYPES = {
   toolError: "tool.error",
   modelUpdated: "model.updated",
   usageUpdated: "usage.updated",
-  projectCreated: "project.created",
   workspaceCreated: "workspace.created",
-  workspaceState: "workspace.state",
-  workspaceError: "workspace.error",
+  sandboxCreated: "sandbox.created",
+  sandboxState: "sandbox.state",
+  sandboxError: "sandbox.error",
   sandboxStatus: "sandbox.status",
   sandboxPrepare: "sandbox.prepare",
   sandboxSelfTest: "sandbox.selftest",
@@ -4765,7 +4765,7 @@ var EmbeddedPiDriver = class {
     const pi = await this.piModule();
     if (!this.modelRuntime) return [];
     const available = await this.modelRuntime.getAvailable();
-    return available.map((m) => ({ provider: m.provider?.id ?? "unknown", id: m.id ?? "" })).filter((m) => m.id);
+    return available.map((m) => ({ provider: typeof m.provider === "string" ? m.provider : m.provider?.id ?? "unknown", id: m.id ?? "" })).filter((m) => m.id);
   }
   subscribe(sessionId, listener) {
     const managed = this.require(sessionId);
@@ -4795,7 +4795,10 @@ var EmbeddedPiDriver = class {
     if (!ref || !this.modelRuntime) return void 0;
     const [provider, id] = ref.split("/");
     if (!provider || !id) return void 0;
-    return this.modelRuntime.getModel(provider, id);
+    const direct = this.modelRuntime.getModel(provider, id);
+    if (direct) return direct;
+    const available = await this.modelRuntime.getAvailable();
+    return available.find((m) => m.id === id || `${typeof m.provider === "string" ? m.provider : m.provider?.id}/${m.id}` === ref);
   }
   dispatch(sessionId, event) {
     const managed = this.sessions.get(sessionId);
