@@ -55,9 +55,57 @@ describe("RealtimeHub", () => {
     hub.publish({ scope: "session", sessionId: "session_2", type: "b", payload: {} });
     const env3 = hub.publish({ scope: "server", type: "c", payload: {} });
 
-    const replay = hub.replayFor(socket, env1.seq);
-    expect(replay.map((e) => e.type)).toEqual(["c"]);
+    const { envelopes, gap } = hub.replayFor(socket, env1.seq);
+    expect(gap).toBe(false);
+    expect(envelopes.map((e) => e.type)).toEqual(["c"]);
     void env3;
+  });
+
+  it("reports a gap when lastSeq predates the buffer", () => {
+    const hub = new RealtimeHub(logger);
+    const socket = makeSocket();
+    hub.attach(socket);
+    hub.subscribe(socket, "session_1");
+    hub.publish({ scope: "session", sessionId: "session_1", type: "a", payload: {} });
+    hub.publish({ scope: "server", type: "b", payload: {} });
+
+    // Fresh server, or a very old lastSeq: buffer start is at the first event.
+    const { envelopes, gap } = hub.replayFor(socket, 0);
+    expect(gap).toBe(false);
+    expect(envelopes).toHaveLength(2);
+
+    const { gap: gap2 } = hub.replayFor(socket, -1);
+    expect(gap2).toBe(true);
+  });
+
+  it("reports a gap when the client is ahead of the server (restart)", () => {
+    const hub = new RealtimeHub(logger);
+    const socket = makeSocket();
+    hub.attach(socket);
+    hub.subscribe(socket, "session_1");
+    hub.publish({ scope: "session", sessionId: "session_1", type: "a", payload: {} });
+    // Client claims seq 99; server only reached seq 1.
+    const { gap } = hub.replayFor(socket, 99);
+    expect(gap).toBe(true);
+  });
+
+  it("reports a gap on an empty buffer (server restart)", () => {
+    const hub = new RealtimeHub(logger);
+    const socket = makeSocket();
+    hub.attach(socket);
+    hub.subscribe(socket, "session_1");
+    const { envelopes, gap } = hub.replayFor(socket, 42);
+    expect(gap).toBe(true);
+    expect(envelopes).toEqual([]);
+  });
+
+  it("lists subscribed sessions per socket", () => {
+    const hub = new RealtimeHub(logger);
+    const socket = makeSocket();
+    hub.attach(socket);
+    hub.subscribe(socket, "session_1");
+    hub.subscribe(socket, "session_2");
+    expect(hub.subscribedSessions(socket).sort()).toEqual(["session_1", "session_2"]);
   });
 
   it("deduplicates command ids within the TTL window", () => {

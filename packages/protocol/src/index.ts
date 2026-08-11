@@ -91,6 +91,9 @@ export const CLIENT_COMMAND_TYPES = [
   "session.subscribe",
   "session.unsubscribe",
   "session.replay",
+  "session.lease.take",
+  "session.lease.release",
+  "session.lease.heartbeat",
   "health.ping",
 ] as const;
 
@@ -135,6 +138,30 @@ export interface UnsubscribePayload {
 
 export interface ReplayPayload {
   lastSeq: number;
+}
+
+export interface LeasePayload {
+  sessionId: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* Editing lease (plan §27)                                            */
+/* ------------------------------------------------------------------ */
+
+export interface LeaseInfo {
+  sessionId: string;
+  holder: string | null;
+  expiresAt: number | null;
+  /** True when the holder is the socket that requested the status. */
+  isSelf?: boolean;
+}
+
+export interface LeaseEventPayload extends LeaseInfo {}
+
+export interface SnapshotPayload {
+  sessionId: string;
+  session: SessionInfo;
+  reason: "replay_gap" | "server_restart";
 }
 
 /* ------------------------------------------------------------------ */
@@ -298,6 +325,8 @@ export interface ProcessExitedPayload {
 export const EVENT_TYPES = {
   sessionCreated: "session.created",
   sessionState: "session.state",
+  sessionSnapshot: "session.snapshot",
+  sessionLease: "session.lease",
   sessionError: "session.error",
   sessionClosed: "session.closed",
 
@@ -335,6 +364,7 @@ export const EVENT_TYPES = {
   commandError: "command.error",
   commandDuplicate: "command.duplicate",
   replayComplete: "replay.complete",
+  serverHello: "server.hello",
 } as const;
 
 export interface CommandAckPayload {

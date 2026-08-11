@@ -27,6 +27,10 @@ interface PiControlState {
   usage: Record<string, UsageInfo>;
   activeSessionId: string | null;
   lastSeq: number;
+  /** Client id announced by the server (server.hello) — lease comparison. */
+  clientId: string | null;
+  /** Editing leases per session (plan §27). */
+  leases: Record<string, { holder: string | null; expiresAt: number | null }>;
 
   setConnection(connection: PiControlState["connection"]): void;
   setActive(sessionId: string | null): void;
@@ -42,6 +46,8 @@ export const usePiControl = create<PiControlState>((set, get) => ({
   usage: {},
   activeSessionId: null,
   lastSeq: 0,
+  clientId: null,
+  leases: {},
 
   setConnection: (connection) => set({ connection }),
   setActive: (activeSessionId) => set({ activeSessionId }),
@@ -99,6 +105,36 @@ export const usePiControl = create<PiControlState>((set, get) => ({
         const info = (envelope.payload as { session: SessionInfo }).session;
         upsertSession(info);
         push({ kind: "system", text: "Session created", tone: "info" }, info.id);
+        break;
+      }
+      case EVENT_TYPES.sessionSnapshot: {
+        const payload = envelope.payload as { sessionId: string; session: SessionInfo; reason: string };
+        // Replay gap (server restart / very old lastSeq): the streamed
+        // transcript is not reconstructable — show current authoritative
+        // state and let the native pi session be the source of truth.
+        upsertSession(payload.session);
+        set({
+          items: {
+            ...items,
+            [payload.sessionId]: [
+              {
+                kind: "system",
+                text: `Reconnected (${payload.reason}) — showing current session state; full transcript lives in the native Pi session.`,
+                tone: "info",
+              },
+            ],
+          },
+        });
+        break;
+      }
+      case EVENT_TYPES.sessionLease: {
+        const payload = envelope.payload as { sessionId: string; holder: string | null; expiresAt: number | null };
+        set({ leases: { ...state.leases, [payload.sessionId]: { holder: payload.holder, expiresAt: payload.expiresAt } } });
+        break;
+      }
+      case EVENT_TYPES.serverHello: {
+        const payload = envelope.payload as { clientId: string };
+        set({ clientId: payload.clientId });
         break;
       }
       case EVENT_TYPES.sessionState: {

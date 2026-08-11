@@ -14,6 +14,7 @@ import { schema } from "@pi-control/database";
 import { eq } from "drizzle-orm";
 import { nowIso } from "@pi-control/shared";
 import { RealtimeHub } from "./realtime/hub.js";
+import { LeaseManager } from "./realtime/leases.js";
 import { SessionManager } from "./sessions/manager.js";
 import { WorkspaceSessionManager } from "./sessions/workspaceSessions.js";
 import { SandboxManager } from "./sandbox/manager.js";
@@ -34,8 +35,14 @@ async function main(): Promise<void> {
   ensureLocalMachine(db);
 
   const hub = new RealtimeHub(logger);
+  const leases = new LeaseManager({
+    // Advisory by default; set PI_CONTROL_ENFORCE_LEASES=1 to reject prompts
+    // from clients that do not hold the editing lease.
+    enforcePrompts: process.env.PI_CONTROL_ENFORCE_LEASES === "1",
+  });
   const sessions = new SessionManager(db, hub, () => new MockPiDriver({ speedMs: 60 }), logger);
-  // Keep workspace session statuses in the control plane in sync with agent events.
+  // Keep workspace session statuses + event checkpoints in the control plane
+  // in sync with agent events.
   const agents = new AgentManager(hub, logger, (sessionId, envelope) => {
     if (envelope.type === "session.state") {
       const status = (envelope.payload as { status?: string }).status;
@@ -46,6 +53,14 @@ async function main(): Promise<void> {
           .run();
       }
     }
+    // Event checkpoint for reconnect/replay (plan §26).
+    db.insert(schema.eventCheckpoints)
+      .values({ scope: "session", scopeId: sessionId, lastSeq: hub.currentSeq(), updatedAt: nowIso() })
+      .onConflictDoUpdate({
+        target: [schema.eventCheckpoints.scope, schema.eventCheckpoints.scopeId],
+        set: { lastSeq: hub.currentSeq(), updatedAt: nowIso() },
+      })
+      .run();
   });
   const workspaceSessions = new WorkspaceSessionManager(db, agents, hub, logger);
 
@@ -64,7 +79,7 @@ async function main(): Promise<void> {
   sandbox.restoreAgents();
   await sandbox.refreshDetection();
 
-  const app = await buildApp({ logger, db, hub, sessions, workspaceSessions, sandbox, agents, runtimeName: runtime.name });
+  const app = await buildApp({ logger, db, hub, sessions, workspaceSessions, sandbox, agents, leases, runtimeName: runtime.name });
 
   try {
     await app.listen({ host: config.host, port: config.port });

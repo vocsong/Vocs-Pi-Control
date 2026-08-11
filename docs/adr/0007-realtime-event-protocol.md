@@ -30,7 +30,12 @@ reconnect semantics without full transcripts in RAM (plan §25, §26).
 - Deterministic replay without per-scope sequence books.
 - Acks share the global seq (harmless, keeps one code path) but are **not**
   buffered: request/response envelopes (`command.ack/error/duplicate`,
-  `replay.complete`) are delivered socket-targeted and never re-enter the
-  replay stream (refined during Phase 0 verification).
-- Phase 4 adds persisted per-scope checkpoints (`event_checkpoints`) and
-  snapshot fallback; the wire format already supports it.
+  `replay.complete`, `server.hello`) are delivered socket-targeted and never
+  re-enter the replay stream (refined during Phase 0 verification).
+- When bounded replay cannot satisfy a reconnect gap (empty buffer after a
+  server restart, lastSeq older than the buffer, or a client ahead of the
+  server), the server sends an authoritative `session.snapshot` instead of
+  a partial replay (Phase 4).
+- The editing lease (plan §27) is a separate server-side concern
+  (`LeaseManager`); leases never block other sessions in the same
+  workspace.

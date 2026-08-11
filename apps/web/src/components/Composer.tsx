@@ -1,23 +1,36 @@
 import { useEffect, useRef, useState } from "react";
 import { usePiControl } from "../store";
-import { useRealtime } from "../realtime/useRealtime";
+import { getRealtime } from "../realtime/useRealtime";
 
 export function Composer() {
   const activeSessionId = usePiControl((s) => s.activeSessionId);
   const sessions = usePiControl((s) => s.sessions);
+  const leases = usePiControl((s) => s.leases);
+  const clientId = usePiControl((s) => s.clientId);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const realtime = useRealtime();
+  const realtime = getRealtime();
 
   const session = activeSessionId ? sessions[activeSessionId] : undefined;
   const running = session?.status === "running";
+  const lease = activeSessionId ? leases[activeSessionId] : undefined;
+  const leaseHeldByOther = !!lease?.holder && lease.holder !== clientId;
 
   useEffect(() => {
     textareaRef.current?.focus();
   }, [activeSessionId]);
 
   if (!session) return null;
+
+  const takeControl = async () => {
+    if (!activeSessionId) return;
+    try {
+      await realtime.sendCommand("session.lease.take", { sessionId: activeSessionId, force: true });
+    } catch (error) {
+      console.error("lease take failed", error);
+    }
+  };
 
   const send = async () => {
     const trimmed = text.trim();
@@ -45,11 +58,20 @@ export function Composer() {
 
   return (
     <footer className="composer">
+      {leaseHeldByOther && (
+        <div className="lease-banner">
+          Another client is controlling this session.
+          <button className="btn btn-small" onClick={() => void takeControl()}>
+            Take control
+          </button>
+        </div>
+      )}
       <textarea
         ref={textareaRef}
         value={text}
         placeholder="Ask Pi…  (Enter to send, Shift+Enter for newline)"
         rows={2}
+        disabled={leaseHeldByOther}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) {
@@ -67,7 +89,7 @@ export function Composer() {
             Abort (Esc)
           </button>
         ) : (
-          <button className="btn btn-primary" onClick={() => void send()} disabled={busy || !text.trim()}>
+          <button className="btn btn-primary" onClick={() => void send()} disabled={busy || !text.trim() || leaseHeldByOther}>
             Send
           </button>
         )}

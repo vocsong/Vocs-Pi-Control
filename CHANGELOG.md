@@ -6,6 +6,27 @@ All notable changes to Vocs Pi Control are documented here. Format follows
 
 ## [Unreleased]
 
+### Added — Phase 4 (reconnect hardening)
+
+- Authoritative snapshots: when bounded replay cannot satisfy a reconnect
+  gap (empty buffer after restart, lastSeq older than the buffer, or a
+  client ahead of the server), the server sends `session.snapshot` with
+  the current session state instead of partial replay
+- Browser editing lease (plan §27): `LeaseManager` with take/release/
+  heartbeat (20s TTL), force takeover, auto-release on socket close, and
+  optional prompt enforcement (`PI_CONTROL_ENFORCE_LEASES=1`); lease
+  events broadcast as `session.lease`; `server.hello` announces the client
+  id for holder comparison
+- Persisted event checkpoints written for workspace session events
+  (`event_checkpoints`)
+- Web client: auto-takes the lease on subscribe and heartbeats it,
+  handles `session.snapshot` (resets the transcript view with a notice),
+  shows a lease banner with "Take control" when another client holds the
+  session
+- Verified live: two concurrent clients — second take rejected, prompt
+  rejected under enforcement, release restores prompting; server restart
+  with a stale lastSeq delivered the authoritative snapshot
+
 ### Added — Phase 3 (real Pi integration)
 
 - `EmbeddedPiDriver` (packages/pi-driver): wraps the official Pi SDK

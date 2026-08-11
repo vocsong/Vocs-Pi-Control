@@ -7,6 +7,7 @@ import type { SessionManager } from "./sessions/manager.js";
 import type { WorkspaceSessionManager } from "./sessions/workspaceSessions.js";
 import type { SandboxManager } from "./sandbox/manager.js";
 import type { AgentManager } from "./agents/agentManager.js";
+import type { LeaseManager } from "./realtime/leases.js";
 import { registerRealtime } from "./realtime/ws.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerSessionRoutes } from "./routes/sessions.js";
@@ -23,6 +24,7 @@ export interface AppDeps {
   workspaceSessions: WorkspaceSessionManager;
   sandbox: SandboxManager;
   agents: AgentManager;
+  leases: LeaseManager;
   runtimeName: string;
 }
 

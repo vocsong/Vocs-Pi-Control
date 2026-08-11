@@ -101,11 +101,21 @@ Acceptance: Pi inside sandbox inspected /workspace (bash ls), wrote
 `phase3-proof.txt` (visible on host), ran tests, streamed everything through
 browser protocol; host home/sockets stayed absent — **verified live**.
 
-## Phase 4 — Reconnect Hardening
+## Phase 4 — Reconnect Hardening (complete)
 
-- [ ] event checkpoints persisted per scope
-- [ ] authoritative snapshot fallback when replay gap cannot be satisfied
-- [ ] browser editing lease
+- [x] sequence numbers, bounded replay buffers (Phase 0)
+- [x] authoritative snapshot when replay cannot satisfy the gap: buffer
+      empty (restart), lastSeq older than buffer, or client ahead of server
+      — verified live after a real server restart
+- [x] command request IDs + duplicate protection (Phase 0)
+- [x] browser editing lease (plan §27): take/release/heartbeat (20s), TTL
+      expiry, force takeover, auto-release on socket close, optional prompt
+      enforcement (`PI_CONTROL_ENFORCE_LEASES=1`) — verified with two
+      concurrent clients
+- [x] persisted event checkpoints (event_checkpoints) on session events
+- [x] server/workspace-agent reconnect with re-sync (Phase 2)
+- [x] web client: auto lease on subscribe + heartbeat, snapshot handling,
+      lease banner + Take control in composer
 
 ## Phase 5 — Projects/Workspaces/Sessions
 

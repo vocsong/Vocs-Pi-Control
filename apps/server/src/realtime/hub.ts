@@ -52,6 +52,11 @@ export class RealtimeHub {
     this.sockets.get(socket)?.delete(sessionId);
   }
 
+  /** Session ids a socket is currently subscribed to. */
+  subscribedSessions(socket: SocketLike): string[] {
+    return [...(this.sockets.get(socket) ?? new Set<string>())];
+  }
+
   /**
    * Remember a command id for idempotency. Returns false when the same id
    * was already processed within the TTL window.
@@ -99,12 +104,27 @@ export class RealtimeHub {
     this.deliver(socket, envelope);
   }
 
-  /** Envelopes after `afterSeq` that this socket is entitled to see. */
-  replayFor(socket: SocketLike, afterSeq: number): EventEnvelope[] {
+  /** Envelopes after `afterSeq` that this socket is entitled to see, plus a gap flag. */
+  replayFor(socket: SocketLike, afterSeq: number): { envelopes: EventEnvelope[]; gap: boolean } {
     const subs = this.sockets.get(socket) ?? new Set<string>();
-    return this.buffer.filter(
-      (env) => env.seq > afterSeq && (env.scope !== "session" || subs.has(env.sessionId ?? "")),
-    );
+    const first = this.buffer[0];
+    // A gap means the client's lastSeq is older than the oldest buffered
+    // event, the buffer is empty (server restart), or the client is AHEAD
+    // of this server (state was lost in a restart): bounded replay cannot
+    // satisfy it, so the caller must send a snapshot.
+    const gap =
+      this.buffer.length === 0 || afterSeq < (first?.seq ?? 0) - 1 || afterSeq > this.seq;
+    return {
+      envelopes: this.buffer.filter(
+        (env) => env.seq > afterSeq && (env.scope !== "session" || subs.has(env.sessionId ?? "")),
+      ),
+      gap,
+    };
+  }
+
+  /** Oldest buffered sequence number (0 when the buffer is empty). */
+  bufferStartSeq(): number {
+    return this.buffer[0]?.seq ?? 0;
   }
 
   ack(socket: SocketLike, commandId: string, payload: Record<string, unknown> = {}): EventEnvelope {

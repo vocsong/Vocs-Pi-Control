@@ -87,10 +87,17 @@ reconnect.
 - `seq` is global and monotonic per server process; clients track the last
   seen seq and pass it to `session.subscribe` for bounded replay.
 - Command responses are envelopes: `command.ack` / `command.error` /
-  `command.duplicate` (socket-targeted, never replayed).
+  `command.duplicate` (socket-targeted, never replayed). `server.hello`
+  announces the client id (used for editing-lease comparisons).
 - Reconnect: subscribe with `lastSeq` → server replays buffered events →
-  `replay.complete`. If the gap exceeds the buffer, the server sends an
-  authoritative snapshot instead (Phase 4).
+  `replay.complete`. If bounded replay cannot satisfy the gap (empty buffer
+  after restart, lastSeq older than the buffer, or client ahead of the
+  server), the server sends an authoritative `session.snapshot` instead
+  (Phase 4).
+- Editing lease (plan §27): `session.lease.take` (optionally `force`),
+  `session.lease.heartbeat` (20s TTL), `session.lease.release`; holder
+  changes broadcast as `session.lease`. Prompts are rejected for
+  non-holders when enforcement is on (`PI_CONTROL_ENFORCE_LEASES=1`).
 
 Event types (scope): `session.created` (server), `session.state`,
 `user.message`, `assistant.start|delta|end`, `thinking.start|delta|end`,

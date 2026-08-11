@@ -39,7 +39,9 @@ export function App() {
       });
   }, []);
 
-  // Subscribe to the active session whenever the connection (re)opens.
+  // Subscribe to the active session whenever the connection (re)opens, and
+  // manage the editing lease (plan §27): take on subscribe, heartbeat while
+  // active, release when switching away.
   useEffect(() => {
     if (connection === "open" && activeSessionId) {
       const state = usePiControl.getState();
@@ -48,7 +50,18 @@ export function App() {
           sessionId: activeSessionId,
           lastSeq: state.lastSeq,
         })
+        .then(() => getRealtime().sendCommand("session.lease.take", { sessionId: activeSessionId }))
         .catch(() => undefined);
+      const heartbeat = setInterval(() => {
+        const current = usePiControl.getState().activeSessionId;
+        if (current) {
+          void getRealtime().sendCommand("session.lease.heartbeat", { sessionId: current }).catch(() => undefined);
+        }
+      }, 20_000);
+      return () => {
+        clearInterval(heartbeat);
+        void getRealtime().sendCommand("session.lease.release", { sessionId: activeSessionId }).catch(() => undefined);
+      };
     }
   }, [connection, activeSessionId]);
 
