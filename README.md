@@ -7,7 +7,8 @@ manages projects, isolated workspaces, Pi sessions, files, Git, terminals,
 processes, tasks and observability — with rootless Podman as the sandbox
 runtime and a deny-by-default host filesystem.
 
-> **Status: Phase 0 (foundation).** The authoritative specification is
+> **Status: Phase 1 complete (Podman runtime verified on Windows).** The
+> authoritative specification is
 > [`docs/pi-control-implementation-plan.md`](docs/pi-control-implementation-plan.md).
 
 ## Security model in one sentence
@@ -17,7 +18,7 @@ runtime and a deny-by-default host filesystem.
 > workspace; independent file work gets a new Git worktree/workspace/container;
 > agents never receive host-wide filesystem or container-runtime control.
 
-## Quick start (Phase 0)
+## Quick start
 
 ```bash
 pnpm install
@@ -26,14 +27,34 @@ pnpm dev
 
 Then open http://127.0.0.1:5173
 
-- Create a session from the sidebar.
-- Send a prompt: the **MockPiDriver** streams thinking, a tool call, and an
-  assistant reply through the full browser → server → driver stack.
-- Close/reload the browser while a prompt runs: the socket reconnects and the
-  server replays missed events (`seq`-based replay, plan §26).
+- Create a session from the sidebar and prompt it: the **MockPiDriver**
+  streams thinking, a tool call, and an assistant reply through the full
+  browser → server → driver stack (real Pi SDK lands in Phase 3).
+- Sandbox runtime is auto-detected: rootless Podman when available, mock
+  otherwise. `PI_CONTROL_RUNTIME=mock|podman|auto` overrides.
 
-Phase 0 runs without Podman (mock sandbox + mock Pi driver). Podman bootstrap
-lands in Phase 1; the real Pi SDK driver in Phase 3.
+### Sandbox (Phase 1)
+
+On first use with Podman (macOS/Windows), prepare the dedicated machine:
+
+```bash
+curl -X POST http://127.0.0.1:5174/api/sandbox/prepare   # creates/starts pi-control machine
+curl -X POST http://127.0.0.1:5174/api/sandbox/self-test  # isolation proof
+```
+
+Add a project and workspace (folder → container):
+
+```bash
+curl -X POST http://127.0.0.1:5174/api/projects -H 'content-type: application/json' \
+  -d '{"name":"my-app","hostRootPath":"C:/Projects/my-app"}'
+curl -X POST http://127.0.0.1:5174/api/projects/<id>/workspaces -H 'content-type: application/json' \
+  -d '{"name":"main","hostPath":"C:/Projects/my-app"}'
+curl -X POST http://127.0.0.1:5174/api/workspaces/<id>/start
+```
+
+The folder mounts as `/workspace` in a rootless container with private
+volumes (`/home/pi`, `/state`, `/cache`, `/tools`), tmpfs `/tmp` + `/run`,
+resource limits, no sockets, no host home, no host network.
 
 ## Monorepo layout
 
@@ -82,9 +103,13 @@ Tracked in [TODO.md](TODO.md) against the plan's phases (0–17) and MVP
 definition (plan §55). Key next milestones: Phase 1 Podman runtime bootstrap,
 Phase 2 workspace agent, Phase 3 real Pi SDK driver.
 
-## Security notes (Phase 0)
+## Security notes
 
 - The server binds `127.0.0.1` only.
-- The mock driver/sandbox provide **no isolation** — they exist to build the
-  plumbing. Real isolation arrives with rootless Podman (Phase 1+); see
-  [`docs/security/threat-model.md`](docs/security/threat-model.md).
+- Phase 1+ sandboxing: rootless Podman, workspace-per-container, no runtime
+  sockets, no host mounts beyond the workspace, resource limits, explicit
+  loopback-only ports. See
+  [`docs/security/threat-model.md`](docs/security/threat-model.md) and the
+  self-test (`POST /api/sandbox/self-test`) for the isolation proof.
+- The mock driver provides **no isolation** — it exists to build plumbing.
+  `PI_CONTROL_RUNTIME=mock` is explicit only.

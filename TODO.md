@@ -25,7 +25,7 @@ Check off items as they land; keep each phase runnable before moving on.
 Acceptance: `pnpm install && pnpm dev` shows a working frontend connected to
 the server with fake session streaming — **done locally, needs CI wiring**.
 
-## Phase 1 — Podman Runtime Bootstrap (in progress)
+## Phase 1 — Podman Runtime Bootstrap (complete)
 
 - [x] Podman detection (linux/macos/win32) via `podman --version` + `podman info`
 - [x] rootless validation; refusal to continue on rootful (no silent fallback)
@@ -48,11 +48,10 @@ the server with fake session streaming — **done locally, needs CI wiring**.
 - [x] control server: runtime selection (auto/mock/podman), SandboxManager
       (projects/workspaces/sandboxes + lifecycle), sandbox status/prepare/
       self-test endpoints, restore registrations after restart
-- [ ] run real Podman integration verification on Windows (in progress)
+- [x] real Podman integration verified on Windows 11 (podman 5.8.3, WSL
+      machine): all self-test checks pass; repo mounted as /workspace;
+      writes bidirectional; host home + sockets absent
 - [ ] macOS/Ubuntu matrix verification
-
-Acceptance: a selected folder mounts as `/workspace`; test file writes succeed;
-host home and Podman socket are absent — **pending on this machine's VM**.
 
 ## Phase 2 — Workspace Agent
 
