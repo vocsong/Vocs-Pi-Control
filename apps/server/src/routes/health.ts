@@ -2,6 +2,7 @@ import type { AppFastify } from "../types.js";
 import { APP_VERSION } from "../config.js";
 import type { RealtimeHub } from "../realtime/hub.js";
 import type { SessionManager } from "../sessions/manager.js";
+import type { SandboxManager } from "../sandbox/manager.js";
 import type { Logger } from "../logger.js";
 import type { Db } from "@pi-control/database";
 import { schema } from "@pi-control/database";
@@ -11,7 +12,8 @@ export interface HealthDeps {
   db: Db;
   hub: RealtimeHub;
   sessions: SessionManager;
-  /** Sandbox runtime name in use ("mock" in Phase 0). */
+  sandbox: SandboxManager;
+  /** Sandbox runtime name in use ("mock" or "podman"). */
   runtimeName: string;
 }
 
@@ -27,12 +29,15 @@ export function registerHealthRoutes(app: AppFastify, deps: HealthDeps): void {
       }
     })();
 
+    const detection = await deps.sandbox.refreshDetection();
+
     return {
       status: dbOk ? "ok" : "degraded",
       service: "pi-control-server",
       version: APP_VERSION,
       uptimeMs: Math.round(process.uptime() * 1000),
       runtime: deps.runtimeName,
+      sandbox: deps.sandbox.statusPayload(detection),
       database: dbOk ? "ok" : "error",
       realtime: { seq: deps.hub.currentSeq() },
       now: new Date().toISOString(),
@@ -40,16 +45,28 @@ export function registerHealthRoutes(app: AppFastify, deps: HealthDeps): void {
   });
 
   app.get("/api/diagnostics", async () => {
-    const projectCount = deps.db.select().from(schema.projects).all().length;
-    const workspaceCount = deps.db.select().from(schema.workspaces).all().length;
-    const sessionCount = deps.sessions.sessionCount();
+    const detection = await deps.sandbox.refreshDetection();
     return {
       version: APP_VERSION,
       node: process.version,
       platform: process.platform,
       arch: process.arch,
       runtime: deps.runtimeName,
-      database: { ok: true, projects: projectCount, workspaces: workspaceCount, sessions: sessionCount },
+      sandbox: {
+        detected: detection.detected,
+        rootlessAvailable: detection.rootlessAvailable,
+        machineRequired: detection.machineRequired,
+        machineConfigured: detection.machineConfigured,
+        machineRunning: detection.machineRunning,
+        podmanVersion: detection.version,
+        messages: detection.messages,
+      },
+      database: {
+        ok: true,
+        projects: deps.sandbox.projectCount(),
+        workspaces: deps.sandbox.workspaceCount(),
+        sessions: deps.sessions.sessionCount(),
+      },
       realtime: { seq: deps.hub.currentSeq() },
       now: new Date().toISOString(),
     };

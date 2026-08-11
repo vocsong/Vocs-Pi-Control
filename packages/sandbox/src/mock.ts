@@ -22,6 +22,7 @@ import {
   type SandboxState,
 } from "./index.js";
 import { newId, nowIso, sleep } from "@pi-control/shared";
+import os from "node:os";
 
 export interface MockSandboxRuntimeOptions {
   /** Simulated detection result. */
@@ -47,6 +48,7 @@ export class MockSandboxRuntime implements SandboxRuntime {
   readonly name = "mock" as const;
 
   private readonly sandboxes = new Map<string, SandboxInfo>();
+  private readonly names = new Map<string, string>();
   private readonly detection: RuntimeDetection;
   private readonly failPrepare: boolean;
   private readonly speedMs: number;
@@ -72,6 +74,26 @@ export class MockSandboxRuntime implements SandboxRuntime {
       rootlessVerified: true,
       messages: ["Mock runtime prepared."],
     };
+  }
+
+  registerSandbox(sandboxId: string, containerName: string): void {
+    this.names.set(sandboxId, containerName);
+    // Mirror the podman runtime: a registered sandbox may already exist
+    // (e.g. restored after a server restart).
+    if (!this.sandboxes.has(sandboxId)) {
+      const now = nowIso();
+      this.sandboxes.set(sandboxId, {
+        id: sandboxId,
+        workspaceId: sandboxId,
+        runtime: "mock",
+        containerName,
+        imageRef: "mock",
+        state: "running",
+        securityProfile: "standard",
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
   }
 
   async createWorkspace(spec: CreateWorkspaceSandboxSpec): Promise<SandboxInfo> {
@@ -118,9 +140,35 @@ export class MockSandboxRuntime implements SandboxRuntime {
     return { ...this.require(sandboxId) };
   }
 
+  async capacity(): Promise<{ cpus: number; memTotalBytes: number }> {
+    return {
+      cpus: os.availableParallelism?.() ?? 4,
+      memTotalBytes: os.totalmem(),
+    };
+  }
+
   async exec(sandboxId: string, request: SandboxExecRequest): Promise<SandboxExecHandle> {
     this.require(sandboxId);
     const cmd = request.command.join(" ");
+
+    // Emulate the observable contract of a compliant sandbox so the security
+    // self-test (and tests depending on it) can run without Podman:
+    //   - /workspace writes succeed and are readable back
+    //   - host-home and socket probes report "absent"
+    //   - /proc/mounts shows no host paths
+    if (cmd.includes("echo pi-control-selftest")) {
+      return { exitCode: 0, stdout: "pi-control-selftest\n", stderr: "", truncated: false };
+    }
+    if (cmd.includes("echo absent")) {
+      return { exitCode: 0, stdout: "absent\n", stderr: "", truncated: false };
+    }
+    if (cmd.includes("cat /proc/mounts")) {
+      return { exitCode: 0, stdout: "", stderr: "", truncated: false };
+    }
+    if (cmd.includes("id -u")) {
+      return { exitCode: 0, stdout: "1000\n", stderr: "", truncated: false };
+    }
+
     return {
       exitCode: 0,
       stdout: `[mock] executed: ${cmd} (cwd: ${request.cwd ?? "/workspace"})`,

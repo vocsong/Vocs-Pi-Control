@@ -4,9 +4,13 @@ import type { Db } from "@pi-control/database";
 import type { Logger } from "./logger.js";
 import type { RealtimeHub } from "./realtime/hub.js";
 import type { SessionManager } from "./sessions/manager.js";
+import type { SandboxManager } from "./sandbox/manager.js";
 import { registerRealtime } from "./realtime/ws.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerSessionRoutes } from "./routes/sessions.js";
+import { registerProjectRoutes } from "./routes/projects.js";
+import { registerWorkspaceRoutes } from "./routes/workspaces.js";
+import { registerSandboxRoutes } from "./routes/sandbox.js";
 import type { AppFastify } from "./types.js";
 
 export interface AppDeps {
@@ -14,6 +18,7 @@ export interface AppDeps {
   db: Db;
   hub: RealtimeHub;
   sessions: SessionManager;
+  sandbox: SandboxManager;
   runtimeName: string;
 }
 
@@ -32,6 +37,9 @@ export async function buildApp(deps: AppDeps): Promise<AppFastify> {
 
   registerHealthRoutes(app, deps);
   registerSessionRoutes(app, deps.sessions);
+  registerProjectRoutes(app, deps.sandbox);
+  registerWorkspaceRoutes(app, deps.sandbox);
+  registerSandboxRoutes(app, deps.sandbox);
   registerRealtime(app, deps);
 
   return app as AppFastify;

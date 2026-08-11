@@ -25,16 +25,34 @@ Check off items as they land; keep each phase runnable before moving on.
 Acceptance: `pnpm install && pnpm dev` shows a working frontend connected to
 the server with fake session streaming — **done locally, needs CI wiring**.
 
-## Phase 1 — Podman Runtime Bootstrap
+## Phase 1 — Podman Runtime Bootstrap (in progress)
 
-- [ ] Podman detection (linux/macos/win32)
-- [ ] rootless validation; subordinate UID/GID diagnostics on Linux
-- [ ] Podman Machine detect/create/start for macOS/Windows (dedicated `pi-control` machine)
-- [ ] base image build/pull
-- [ ] create/start/stop/remove workspace container (rootless, no privileged, no socket)
-- [ ] explicit bind mount + named volumes (/home/pi, /state, /cache, /tools)
-- [ ] resource limits (CPU/mem/PIDs) with host-capacity detection
-- [ ] security self-test (host home absent, socket absent, /workspace RW)
+- [x] Podman detection (linux/macos/win32) via `podman --version` + `podman info`
+- [x] rootless validation; refusal to continue on rootful (no silent fallback)
+- [x] Podman Machine detect/create/start for macOS/Windows (dedicated `pi-control`
+      machine; positional name for podman 5.x with `--name` fallback for 4.x)
+- [x] `RootlessPodmanRuntime` adapter: create/start/stop/remove container,
+      exec, logs, build/pull image, listPorts
+- [x] explicit bind mount + named volumes (/home/pi, /state, /cache, /tools),
+      tmpfs /tmp + /run
+- [x] resource limits (CPU/mem/PIDs) with host-capacity detection
+      (`defaultResources`: 2–4 CPU, 4–8 GiB, PID 512)
+- [x] security flag builder (`buildCreateArgs`) with unit-tested non-negotiable
+      posture (no privileged/socket/host-ns/devices, no-new-privileges)
+- [x] path translation for Podman Machine hosts (win32 → /mnt/<drive>,
+      macOS home share, linux passthrough)
+- [x] base image Dockerfile (`images/base`) — node 22 + git + tools, sandbox
+      env/PATH policy
+- [x] security self-test: /workspace RW, host home absent, socket absent,
+      no host mounts, cleanup
+- [x] control server: runtime selection (auto/mock/podman), SandboxManager
+      (projects/workspaces/sandboxes + lifecycle), sandbox status/prepare/
+      self-test endpoints, restore registrations after restart
+- [ ] run real Podman integration verification on Windows (in progress)
+- [ ] macOS/Ubuntu matrix verification
+
+Acceptance: a selected folder mounts as `/workspace`; test file writes succeed;
+host home and Podman socket are absent — **pending on this machine's VM**.
 
 ## Phase 2 — Workspace Agent
 

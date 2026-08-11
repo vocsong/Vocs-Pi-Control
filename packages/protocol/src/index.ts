@@ -189,6 +189,70 @@ export interface ClosedEventPayload {
 }
 
 /* ------------------------------------------------------------------ */
+/* Project / workspace / sandbox payloads                              */
+/* ------------------------------------------------------------------ */
+
+export type WorkspaceStatus =
+  | "missing"
+  | "building"
+  | "stopped"
+  | "starting"
+  | "running"
+  | "stopping"
+  | "error";
+
+export interface ProjectInfo {
+  id: string;
+  machineId: string;
+  name: string;
+  hostRootPath: string;
+  gitRepositoryRoot?: string;
+  createdAt: string;
+  lastOpenedAt?: string;
+}
+
+export interface WorkspaceInfo {
+  id: string;
+  projectId: string;
+  machineId: string;
+  name: string;
+  hostPath: string;
+  containerWorkspacePath: string;
+  kind: "main" | "worktree" | "directory";
+  gitBranch?: string;
+  securityProfile: "standard" | "restricted" | "trusted";
+  sandboxId?: string;
+  status: WorkspaceStatus;
+  createdAt: string;
+  archivedAt?: string;
+}
+
+export interface SandboxStatusPayload {
+  runtime: string;
+  detected: boolean;
+  rootlessAvailable: boolean;
+  machineRequired: boolean;
+  machineConfigured: boolean;
+  machineRunning: boolean;
+  version?: string;
+  messages: string[];
+}
+
+export interface PrepareEventPayload {
+  phase: "started" | "progress" | "complete" | "error";
+  message?: string;
+  ok?: boolean;
+}
+
+export interface SelfTestEventPayload {
+  phase: "started" | "check" | "complete" | "error";
+  checkName?: string;
+  checkOk?: boolean;
+  detail?: string;
+  ok?: boolean;
+}
+
+/* ------------------------------------------------------------------ */
 /* Event types                                                         */
 /* ------------------------------------------------------------------ */
 
@@ -213,6 +277,14 @@ export const EVENT_TYPES = {
 
   modelUpdated: "model.updated",
   usageUpdated: "usage.updated",
+
+  projectCreated: "project.created",
+  workspaceCreated: "workspace.created",
+  workspaceState: "workspace.state",
+  workspaceError: "workspace.error",
+  sandboxStatus: "sandbox.status",
+  sandboxPrepare: "sandbox.prepare",
+  sandboxSelfTest: "sandbox.selftest",
 
   commandAck: "command.ack",
   commandError: "command.error",

@@ -119,6 +119,11 @@ export interface PortInfo {
   bindHost: "127.0.0.1" | "0.0.0.0";
 }
 
+export interface HostCapacity {
+  cpus: number;
+  memTotalBytes: number;
+}
+
 export interface BuildImageSpec {
   imageRef: string;
   buildDir: string;
@@ -137,6 +142,12 @@ export interface SandboxRuntime {
   detect(): Promise<RuntimeDetection>;
   prepareHost(): Promise<PrepareResult>;
 
+  /**
+   * Tell the runtime how to address an existing sandbox (container name).
+   * Called by the control server at startup from its persisted records.
+   */
+  registerSandbox(sandboxId: string, containerName: string): void;
+
   createWorkspace(spec: CreateWorkspaceSandboxSpec): Promise<SandboxInfo>;
   startWorkspace(sandboxId: string): Promise<void>;
   stopWorkspace(sandboxId: string): Promise<void>;
@@ -151,6 +162,43 @@ export interface SandboxRuntime {
   pullImage(ref: string): Promise<ImageInfo>;
 
   listPorts(sandboxId: string): Promise<PortInfo[]>;
+
+  /** Host capacity of the container host (used for default resource limits). */
+  capacity(): Promise<HostCapacity>;
 }
 
 export type SandboxRuntimeFactory = () => SandboxRuntime;
+
+/* ------------------------------------------------------------------ */
+/* Podman adapter (Phase 1)                                            */
+/* ------------------------------------------------------------------ */
+
+export {
+  RootlessPodmanRuntime,
+  DEFAULT_MACHINE_NAME,
+  type RootlessPodmanOptions,
+} from "./podman/runtime.js";
+export { buildCreateArgs, type CreateContainerOptions } from "./podman/buildArgs.js";
+export { translateHostPath, detectProvider, type MachineProvider } from "./podman/paths.js";
+export {
+  defaultResources,
+  MIN_MEMORY_BYTES,
+  MAX_MEMORY_BYTES,
+  MIN_CPUS,
+  MAX_CPUS,
+  DEFAULT_PID_LIMIT,
+  type ResourceDefaults,
+} from "./podman/resources.js";
+export {
+  createPodmanRunner,
+  PodmanError,
+  type PodmanRunner,
+  type PodmanResult,
+  type PodmanRunOptions,
+} from "./podman/runner.js";
+export {
+  runSecuritySelfTest,
+  type SelfTestCheck,
+  type SelfTestOptions,
+  type SelfTestResult,
+} from "./podman/selfTest.js";

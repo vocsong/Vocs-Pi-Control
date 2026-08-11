@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./mock": "./src/mock.ts"
+    "./mock": "./src/mock.ts",
+    "./podman": "./src/podman/index.ts"
   },
   "types": "./src/index.ts",
   "main": "./src/index.ts",
@@ -15,7 +16,8 @@
   },
   "dependencies": {
     "@pi-control/protocol": "workspace:*",
-    "@pi-control/shared": "workspace:*"
+    "@pi-control/shared": "workspace:*",
+    "execa": "^9.5.2"
   },
   "devDependencies": {
     "typescript": "^5.8.3",

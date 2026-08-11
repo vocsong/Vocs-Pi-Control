@@ -6,6 +6,31 @@ All notable changes to Vocs Pi Control are documented here. Format follows
 
 ## [Unreleased]
 
+### Added — Phase 1 (Podman runtime bootstrap)
+
+- `RootlessPodmanRuntime`: detect/prepare/create/start/stop/remove, exec,
+  logs, image build/pull, ports, capacity — all through the `SandboxRuntime`
+  adapter, never raw `podman` calls outside it
+- Podman Machine support (win32/macOS): dedicated `pi-control` machine,
+  create (positional name for podman 5.x, `--name` fallback for 4.x) and
+  start with long timeouts
+- Rootless verification with refusal to continue on rootful engines
+- Unit-tested container argument builder enforcing the non-negotiable
+  security posture (no privileged, no sockets, no host namespaces/devices,
+  no-new-privileges, loopback-only ports)
+- Path translation for machine hosts (Windows → /mnt/<drive>, macOS home
+  share, Linux passthrough)
+- Conservative default resource limits from host capacity (2–4 CPU,
+  4–8 GiB, PID 512)
+- Security self-test: /workspace write, host-home absence, socket absence,
+  mount audit, cleanup
+- Base image Dockerfile (`images/base`): Node 22, Git, CA certs, sandbox
+  env/PATH policy
+- Control server: runtime auto-selection, SandboxManager with projects/
+  workspaces/sandboxes lifecycle, `/api/sandbox/status|prepare|self-test`,
+  project/workspace REST routes, sandbox registration restore on restart
+- Protocol: project/workspace/sandbox event types and payloads
+
 ### Added — Phase 0 (foundation)
 
 - pnpm monorepo: `apps/server`, `apps/web`, `apps/workspace-agent` (skeleton),
