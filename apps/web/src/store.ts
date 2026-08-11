@@ -147,10 +147,12 @@ export const usePiControl = create<PiControlState>((set, get) => ({
   },
 
   createWorkspace: async (name, hostRootPath) => {
-    const { workspace } = await api.createWorkspace({ name, ...(hostRootPath ? { hostRootPath } : {}) });
+    const { workspace, sandbox } = await api.createWorkspace({ name, ...(hostRootPath ? { hostRootPath } : {}) });
     set({
       workspaces: { ...get().workspaces, [workspace.id]: workspace },
-      workspaceOrder: [...get().workspaceOrder, workspace.id],
+      workspaceOrder: appendOrder(get().workspaceOrder, workspace.id),
+      sandboxes: { ...get().sandboxes, [sandbox.id]: sandbox },
+      sandboxOrder: appendOrder(get().sandboxOrder, sandbox.id),
       activeWorkspaceId: workspace.id,
     });
   },

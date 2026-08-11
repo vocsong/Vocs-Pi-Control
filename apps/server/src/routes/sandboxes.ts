@@ -22,6 +22,10 @@ const createSandboxBody = z
   .strict();
 
 export function registerSandboxContainerRoutes(app: AppFastify, manager: SandboxManager, agents: AgentManager): void {
+  app.get("/api/sandboxes", async () => {
+    return { sandboxes: manager.listSandboxes() };
+  });
+
   app.get("/api/workspaces/:workspaceId/sandboxes", async (request) => {
     const { workspaceId } = request.params as { workspaceId: string };
     return { sandboxes: manager.listSandboxes(workspaceId) };

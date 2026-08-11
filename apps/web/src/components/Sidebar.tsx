@@ -34,7 +34,6 @@ const SANDBOX_STATUS: Record<string, { dot: string; cls: string }> = {
 function AddWorkspaceForm({ onDone }: { onDone: () => void }) {
   const createWorkspace = usePiControl((s) => s.createWorkspace);
   const [name, setName] = useState("");
-  const [subfolder, setSubfolder] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,7 +42,7 @@ function AddWorkspaceForm({ onDone }: { onDone: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      await createWorkspace(name.trim(), subfolder.trim() || undefined);
+      await createWorkspace(name.trim());
       onDone();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -54,16 +53,16 @@ function AddWorkspaceForm({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="inline-form">
-      <input placeholder="Workspace name (e.g. my-app)" value={name} onChange={(e) => setName(e.target.value)} />
       <input
-        placeholder="Subfolder under the root (optional)"
-        value={subfolder}
-        onChange={(e) => setSubfolder(e.target.value)}
+        autoFocus
+        placeholder="Workspace name (e.g. my-app)"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && void submit()}
       />
       {error && <div className="form-error">{error}</div>}
       <div className="form-actions">
-        <button className="btn btn-small" onClick={() => void submit()} disabled={busy}>
+        <button className="btn btn-small" onClick={() => void submit()} disabled={busy || !name.trim()}>
           Add workspace
         </button>
         <button className="btn btn-small" onClick={onDone}>
