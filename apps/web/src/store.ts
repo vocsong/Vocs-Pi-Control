@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type {
   EventEnvelope,
-  ProjectInfo,
+  SandboxInfo,
   SessionInfo,
   UsageInfo,
   WorkspaceInfo,
@@ -55,14 +55,14 @@ interface PiControlState {
   clientId: string | null;
   /** Editing leases per session (plan §27). */
   leases: Record<string, { holder: string | null; expiresAt: number | null }>;
-  /** Projects / workspaces hierarchy (Phase 5). */
-  projects: Record<string, ProjectInfo>;
-  projectOrder: string[];
+  /** Workspaces (folders) / sandboxes (containers) hierarchy. */
   workspaces: Record<string, WorkspaceInfo>;
   workspaceOrder: string[];
-  /** Selected project/workspace for navigation. */
-  activeProjectId: string | null;
+  sandboxes: Record<string, SandboxInfo>;
+  sandboxOrder: string[];
+  /** Selected workspace (folder) / sandbox (container) for navigation. */
   activeWorkspaceId: string | null;
+  activeSandboxId: string | null;
   /** Sandbox runtime status (Phase 1). */
   sandbox: SandboxStatusInfo | null;
   sandboxBusy: boolean;
@@ -72,15 +72,15 @@ interface PiControlState {
 
   setConnection(connection: PiControlState["connection"]): void;
   setActive(sessionId: string | null): void;
-  setActiveProject(projectId: string | null): void;
   setActiveWorkspace(workspaceId: string | null): void;
+  setActiveSandbox(sandboxId: string | null): void;
   createSession(): Promise<void>;
   createWorkspaceSession(workspaceId: string): Promise<void>;
-  createProject(name: string, hostRootPath: string): Promise<void>;
-  createWorkspace(name: string, hostPath: string, profile?: "node" | "python" | "universal"): Promise<void>;
-  startWorkspace(workspaceId: string): Promise<void>;
-  stopWorkspace(workspaceId: string): Promise<void>;
-  removeWorkspace(workspaceId: string): Promise<void>;
+  createWorkspace(name: string, hostRootPath?: string): Promise<void>;
+  createSandbox(name: string, hostPath?: string, profile?: "node" | "python" | "universal"): Promise<void>;
+  startSandbox(sandboxId: string): Promise<void>;
+  stopSandbox(sandboxId: string): Promise<void>;
+  removeSandbox(sandboxId: string): Promise<void>;
   prepareSandbox(): Promise<void>;
   runSelfTest(): Promise<void>;
   setRequestedFile(path: string | null): void;
@@ -97,12 +97,12 @@ export const usePiControl = create<PiControlState>((set, get) => ({
   lastSeq: 0,
   clientId: null,
   leases: {},
-  projects: {},
-  projectOrder: [],
   workspaces: {},
   workspaceOrder: [],
-  activeProjectId: null,
+  sandboxes: {},
+  sandboxOrder: [],
   activeWorkspaceId: null,
+  activeSandboxId: null,
   sandbox: null,
   sandboxBusy: false,
   selfTest: null,
@@ -110,12 +110,20 @@ export const usePiControl = create<PiControlState>((set, get) => ({
 
   setConnection: (connection) => set({ connection }),
   setActive: (activeSessionId) => set({ activeSessionId }),
-  setActiveProject: (activeProjectId) => set({ activeProjectId }),
   setActiveWorkspace: (activeWorkspaceId) => set({ activeWorkspaceId }),
+  setActiveSandbox: (activeSandboxId) => set({ activeSandboxId }),
 
   createSession: async () => {
+    // Prefer a REAL Pi session: when a workspace is running (agent
+    // connected), create the session inside it; otherwise fall back to the
+    // mock server-side session.
+    const state = get();
+    const runningSandbox = Object.values(state.sandboxes).find((sb) => sb.status === "running");
+    if (runningSandbox) {
+      return state.createWorkspaceSession(runningSandbox.id);
+    }
     const { session } = await api.createSession({
-      title: `Session ${Object.keys(get().sessions).length + 1}`,
+      title: `Session ${Object.keys(state.sessions).length + 1}`,
     });
     const sessions = { ...get().sessions, [session.id]: session };
     const sessionOrder = get().sessionOrder.includes(session.id)
@@ -135,24 +143,8 @@ export const usePiControl = create<PiControlState>((set, get) => ({
     set({ sessions, sessionOrder, activeSessionId: session.id });
   },
 
-  createProject: async (name, hostRootPath) => {
-    const { project } = await api.createProject({ name, hostRootPath });
-    set({
-      projects: { ...get().projects, [project.id]: project },
-      projectOrder: [...get().projectOrder, project.id],
-      activeProjectId: project.id,
-    });
-  },
-
-  createWorkspace: async (name, hostPath, profile = "node") => {
-    const projectId = get().activeProjectId;
-    if (!projectId) throw new Error("no active project");
-    const { workspace } = await api.createWorkspace(projectId, {
-      name,
-      hostPath,
-      securityProfile: "standard",
-      profile,
-    });
+  createWorkspace: async (name, hostRootPath) => {
+    const { workspace } = await api.createWorkspace({ name, ...(hostRootPath ? { hostRootPath } : {}) });
     set({
       workspaces: { ...get().workspaces, [workspace.id]: workspace },
       workspaceOrder: [...get().workspaceOrder, workspace.id],
@@ -160,24 +152,40 @@ export const usePiControl = create<PiControlState>((set, get) => ({
     });
   },
 
-  startWorkspace: async (workspaceId) => {
-    const { workspace } = await api.startWorkspace(workspaceId);
-    set({ workspaces: { ...get().workspaces, [workspaceId]: workspace } });
-  },
-
-  stopWorkspace: async (workspaceId) => {
-    const { workspace } = await api.stopWorkspace(workspaceId);
-    set({ workspaces: { ...get().workspaces, [workspaceId]: workspace } });
-  },
-
-  removeWorkspace: async (workspaceId) => {
-    await api.removeWorkspace(workspaceId);
-    const workspaces = { ...get().workspaces };
-    delete workspaces[workspaceId];
+  createSandbox: async (name, hostPath, profile = "node") => {
+    const workspaceId = get().activeWorkspaceId;
+    if (!workspaceId) throw new Error("no active workspace");
+    const { sandbox } = await api.createSandbox(workspaceId, {
+      name,
+      ...(hostPath ? { hostPath } : {}),
+      securityProfile: "standard",
+      profile,
+    });
     set({
-      workspaces,
-      workspaceOrder: get().workspaceOrder.filter((id) => id !== workspaceId),
-      activeWorkspaceId: get().activeWorkspaceId === workspaceId ? null : get().activeWorkspaceId,
+      sandboxes: { ...get().sandboxes, [sandbox.id]: sandbox },
+      sandboxOrder: [...get().sandboxOrder, sandbox.id],
+      activeSandboxId: sandbox.id,
+    });
+  },
+
+  startSandbox: async (sandboxId) => {
+    const { sandbox } = await api.startSandbox(sandboxId);
+    set({ sandboxes: { ...get().sandboxes, [sandboxId]: sandbox } });
+  },
+
+  stopSandbox: async (sandboxId) => {
+    const { sandbox } = await api.stopSandbox(sandboxId);
+    set({ sandboxes: { ...get().sandboxes, [sandboxId]: sandbox } });
+  },
+
+  removeSandbox: async (sandboxId) => {
+    await api.removeSandbox(sandboxId);
+    const sandboxes = { ...get().sandboxes };
+    delete sandboxes[sandboxId];
+    set({
+      sandboxes,
+      sandboxOrder: get().sandboxOrder.filter((id) => id !== sandboxId),
+      activeSandboxId: get().activeSandboxId === sandboxId ? null : get().activeSandboxId,
     });
   },
 
@@ -253,14 +261,6 @@ export const usePiControl = create<PiControlState>((set, get) => ({
         push({ kind: "system", text: "Session created", tone: "info" }, info.id);
         break;
       }
-      case EVENT_TYPES.projectCreated: {
-        const info = (envelope.payload as { project: ProjectInfo }).project;
-        set({
-          projects: { ...state.projects, [info.id]: info },
-          projectOrder: state.projectOrder.includes(info.id) ? state.projectOrder : [...state.projectOrder, info.id],
-        });
-        break;
-      }
       case EVENT_TYPES.workspaceCreated: {
         const info = (envelope.payload as { workspace: WorkspaceInfo }).workspace;
         set({
@@ -269,11 +269,19 @@ export const usePiControl = create<PiControlState>((set, get) => ({
         });
         break;
       }
-      case EVENT_TYPES.workspaceState: {
-        const payload = envelope.payload as { workspaceId: string; status: WorkspaceInfo["status"] };
-        const current = state.workspaces[payload.workspaceId];
+      case EVENT_TYPES.sandboxCreated: {
+        const info = (envelope.payload as { sandbox: SandboxInfo }).sandbox;
+        set({
+          sandboxes: { ...state.sandboxes, [info.id]: info },
+          sandboxOrder: state.sandboxOrder.includes(info.id) ? state.sandboxOrder : [...state.sandboxOrder, info.id],
+        });
+        break;
+      }
+      case EVENT_TYPES.sandboxState: {
+        const payload = envelope.payload as { sandboxId: string; status: SandboxInfo["status"] };
+        const current = state.sandboxes[payload.sandboxId];
         if (current) {
-          set({ workspaces: { ...state.workspaces, [payload.workspaceId]: { ...current, status: payload.status } } });
+          set({ sandboxes: { ...state.sandboxes, [payload.sandboxId]: { ...current, status: payload.status } } });
         }
         break;
       }
@@ -282,11 +290,11 @@ export const usePiControl = create<PiControlState>((set, get) => ({
         break;
       }
       case EVENT_TYPES.agentState: {
-        // Agent connection state reflects in the workspace status detail.
+        // Agent connection state reflects in the sandbox status detail.
         const payload = envelope.payload as { workspaceId: string; state: string };
-        const current = state.workspaces[payload.workspaceId];
+        const current = state.sandboxes[payload.workspaceId];
         if (current && current.status === "running") {
-          set({ workspaces: { ...state.workspaces, [payload.workspaceId]: { ...current } } });
+          set({ sandboxes: { ...state.sandboxes, [payload.workspaceId]: { ...current } } });
         }
         break;
       }

@@ -99,9 +99,9 @@ function FileTree({
 /* ------------------------------------------------------------------ */
 
 export function FilesView() {
-  const activeWorkspaceId = usePiControl((s) => s.activeWorkspaceId);
-  const workspaces = usePiControl((s) => s.workspaces);
-  const workspace = activeWorkspaceId ? workspaces[activeWorkspaceId] : undefined;
+  const activeSandboxId = usePiControl((s) => s.activeSandboxId);
+  const sandboxes = usePiControl((s) => s.sandboxes);
+  const sandbox = activeSandboxId ? sandboxes[activeSandboxId] : undefined;
 
   const [rootEntries, setRootEntries] = useState<TreeNode[]>([]);
   const [selected, setSelected] = useState<TreeNode | null>(null);
@@ -115,9 +115,9 @@ export function FilesView() {
   const [renaming, setRenaming] = useState(false);
 
   const loadRoot = async () => {
-    if (!activeWorkspaceId) return;
+    if (!activeSandboxId) return;
     try {
-      const { entries } = await api.listFiles(activeWorkspaceId);
+      const { entries } = await api.listFiles(activeSandboxId);
       setRootEntries(entries as TreeNode[]);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -129,24 +129,24 @@ export function FilesView() {
     setSelected(null);
     setDirty(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeWorkspaceId]);
+  }, [activeSandboxId]);
 
   // Quick-open target (command palette → Files tab).
   const requestedFile = usePiControl((s) => s.requestedFile);
   const setRequestedFile = usePiControl((s) => s.setRequestedFile);
   useEffect(() => {
-    if (!requestedFile || !activeWorkspaceId) return;
+    if (!requestedFile || !activeSandboxId) return;
     const parts = requestedFile.split("/");
     const name = parts.pop() ?? requestedFile;
     void openFile({ name, path: requestedFile, type: "file", size: 0, mtimeMs: 0 });
     setRequestedFile(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestedFile, activeWorkspaceId]);
+  }, [requestedFile, activeSandboxId]);
 
   const openFile = async (entry: TreeNode) => {
-    if (!activeWorkspaceId) return;
+    if (!activeSandboxId) return;
     try {
-      const { file } = await api.readFile(activeWorkspaceId, entry.path);
+      const { file } = await api.readFile(activeSandboxId, entry.path);
       setSelected(entry);
       setContent(file.content);
       setEncoding(file.encoding);
@@ -158,10 +158,10 @@ export function FilesView() {
   };
 
   const save = async () => {
-    if (!activeWorkspaceId || !selected) return;
+    if (!activeSandboxId || !selected) return;
     setSaving(true);
     try {
-      await api.writeFile(activeWorkspaceId, selected.path, content, encoding);
+      await api.writeFile(activeSandboxId, selected.path, content, encoding);
       setDirty(false);
       void loadRoot();
     } catch (e) {
@@ -172,12 +172,12 @@ export function FilesView() {
   };
 
   const create = async () => {
-    if (!activeWorkspaceId || !createName.trim()) return;
+    if (!activeSandboxId || !createName.trim()) return;
     try {
       const base = selected?.type === "dir" ? selected.path : "";
       const target = base ? `${base}/${createName.trim()}` : createName.trim();
-      if (creating === "dir") await api.mkdirFile(activeWorkspaceId, target);
-      else await api.writeFile(activeWorkspaceId, target, "");
+      if (creating === "dir") await api.mkdirFile(activeSandboxId, target);
+      else await api.writeFile(activeSandboxId, target, "");
       setCreating(null);
       setCreateName("");
       void loadRoot();
@@ -187,10 +187,10 @@ export function FilesView() {
   };
 
   const remove = async () => {
-    if (!activeWorkspaceId || !selected) return;
+    if (!activeSandboxId || !selected) return;
     if (!window.confirm(`Delete ${selected.path}?`)) return;
     try {
-      await api.removeFile(activeWorkspaceId, selected.path, selected.type === "dir");
+      await api.removeFile(activeSandboxId, selected.path, selected.type === "dir");
       setSelected(null);
       setDirty(false);
       void loadRoot();
@@ -200,10 +200,10 @@ export function FilesView() {
   };
 
   const rename = async () => {
-    if (!activeWorkspaceId || !selected || !createName.trim()) return;
+    if (!activeSandboxId || !selected || !createName.trim()) return;
     try {
       const dir = selected.path.includes("/") ? selected.path.slice(0, selected.path.lastIndexOf("/") + 1) : "";
-      await api.renameFile(activeWorkspaceId, selected.path, `${dir}${createName.trim()}`);
+      await api.renameFile(activeSandboxId, selected.path, `${dir}${createName.trim()}`);
       setRenaming(false);
       setCreateName("");
       void loadRoot();
@@ -222,8 +222,8 @@ export function FilesView() {
     return `data:${mime};base64,${content}`;
   }, [selected, isImage, encoding, content]);
 
-  if (!workspace) {
-    return <div className="files-empty">Select or create a workspace to browse its files.</div>;
+  if (!sandbox) {
+    return <div className="files-empty">Start a sandbox to browse its files.</div>;
   }
 
   return (
@@ -259,7 +259,7 @@ export function FilesView() {
             </div>
           </div>
         )}
-        <FileTree workspaceId={workspace.id} entries={rootEntries} selected={selected?.path ?? null} onSelect={(e) => void openFile(e)} onRefresh={() => void loadRoot()} />
+        <FileTree workspaceId={sandbox.id} entries={rootEntries} selected={selected?.path ?? null} onSelect={(e) => void openFile(e)} onRefresh={() => void loadRoot()} />
       </div>
       <div className="files-editor-pane">
         {!selected ? (

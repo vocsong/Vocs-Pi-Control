@@ -18,19 +18,19 @@ const updateBody = z
   .strict();
 
 export function registerTaskRoutes(app: AppFastify, db: Db, hub: RealtimeHub): void {
-  app.get("/api/workspaces/:workspaceId/tasks", async (request) => {
-    const { workspaceId } = request.params as { workspaceId: string };
-    const rows = db.select().from(schema.tasks).where(eq(schema.tasks.workspaceId, workspaceId)).orderBy(desc(schema.tasks.createdAt)).all();
+  app.get("/api/sandboxes/:sandboxId/tasks", async (request) => {
+    const { sandboxId } = request.params as { sandboxId: string };
+    const rows = db.select().from(schema.tasks).where(eq(schema.tasks.workspaceId, sandboxId)).orderBy(desc(schema.tasks.createdAt)).all();
     return { tasks: rows.map(toTaskInfo) };
   });
 
-  app.post("/api/workspaces/:workspaceId/tasks", async (request, reply) => {
-    const { workspaceId } = request.params as { workspaceId: string };
+  app.post("/api/sandboxes/:sandboxId/tasks", async (request, reply) => {
+    const { sandboxId } = request.params as { sandboxId: string };
     const body = createBody.parse(request.body);
     const now = nowIso();
     const row = {
       id: newId("task"),
-      workspaceId,
+      workspaceId: sandboxId,
       title: body.title,
       description: body.description ?? null,
       status: "todo",
@@ -40,7 +40,7 @@ export function registerTaskRoutes(app: AppFastify, db: Db, hub: RealtimeHub): v
     };
     db.insert(schema.tasks).values(row).run();
     const info = toTaskInfo(row);
-    hub.publish({ scope: "workspace", workspaceId, type: EVENT_TYPES.taskCreated, payload: { task: info } });
+    hub.publish({ scope: "workspace", workspaceId: sandboxId, type: EVENT_TYPES.taskCreated, payload: { task: info } });
     return reply.code(201).send({ task: info });
   });
 

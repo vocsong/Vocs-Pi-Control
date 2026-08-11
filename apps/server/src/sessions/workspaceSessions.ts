@@ -15,6 +15,7 @@ import { newId, nowIso } from "@pi-control/shared";
 import type { AgentManager } from "../agents/agentManager.js";
 import type { RealtimeHub } from "../realtime/hub.js";
 import type { Logger } from "../logger.js";
+import type { SessionDefaults } from "../settings/service.js";
 
 export interface CreateWorkspaceSessionInput {
   title?: string;
@@ -28,12 +29,16 @@ export class WorkspaceSessionManager {
     private readonly agents: AgentManager,
     private readonly hub: RealtimeHub,
     private readonly logger: Logger,
+    private readonly defaults?: () => SessionDefaults,
   ) {}
 
   async create(workspaceId: string, input: CreateWorkspaceSessionInput = {}): Promise<SessionInfo> {
     const sessionId = newId("session");
     const now = nowIso();
     const title = input.title ?? "New session";
+    const defaults = this.defaults?.() ?? { defaultModel: null, defaultThinkingLevel: null };
+    const model = input.model ?? defaults.defaultModel ?? undefined;
+    const thinkingLevel = input.thinkingLevel ?? defaults.defaultThinkingLevel ?? undefined;
 
     this.db
       .insert(schema.sessions)
@@ -42,8 +47,8 @@ export class WorkspaceSessionManager {
         workspaceId,
         title,
         status: "starting",
-        model: input.model ?? null,
-        thinkingLevel: input.thinkingLevel ?? null,
+        model: model ?? null,
+        thinkingLevel: thinkingLevel ?? null,
         createdAt: now,
         updatedAt: now,
         lastActivityAt: now,
@@ -53,8 +58,8 @@ export class WorkspaceSessionManager {
     const created = await this.agents.createSession(workspaceId, {
       sessionId,
       title,
-      model: input.model,
-      thinkingLevel: input.thinkingLevel,
+      model,
+      thinkingLevel,
     });
 
     const nativePiSessionId = (created.nativePiSessionId as string | undefined) ?? null;

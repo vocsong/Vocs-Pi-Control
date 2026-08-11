@@ -9,16 +9,18 @@ import { FilesView } from "./components/FilesView";
 import { GitView } from "./components/GitView";
 import { ProcessesView, TerminalView } from "./components/TerminalView";
 import { TasksView } from "./components/TasksView";
+import { SettingsView } from "./components/SettingsView";
 import { TraceView } from "./components/TraceView";
 import { CommandPalette, QuickOpen, type CommandItem } from "./components/CommandPalette";
 import { StatusBar } from "./components/StatusBar";
 
-type Tab = "chat" | "files" | "git" | "terminal" | "processes" | "tasks" | "trace";
+type Tab = "chat" | "files" | "git" | "terminal" | "processes" | "tasks" | "trace" | "settings";
 
 export function App() {
   const connection = usePiControl((s) => s.connection);
   const activeSessionId = usePiControl((s) => s.activeSessionId);
   const activeWorkspaceId = usePiControl((s) => s.activeWorkspaceId);
+  const activeSandboxId = usePiControl((s) => s.activeSandboxId);
   const [health, setHealth] = useState<HealthInfo | null>(null);
   const [tab, setTab] = useState<Tab>("chat");
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -51,20 +53,20 @@ export function App() {
         /* server may not be up yet; the socket will surface it */
       });
     api
-      .listProjects()
-      .then(({ projects }) => {
-        usePiControl.setState({
-          projects: Object.fromEntries(projects.map((p) => [p.id, p])),
-          projectOrder: projects.map((p) => p.id),
-        });
-      })
-      .catch(() => undefined);
-    api
       .listWorkspaces()
       .then(({ workspaces }) => {
         usePiControl.setState({
           workspaces: Object.fromEntries(workspaces.map((w) => [w.id, w])),
           workspaceOrder: workspaces.map((w) => w.id),
+        });
+      })
+      .catch(() => undefined);
+    api
+      .listSandboxes()
+      .then(({ sandboxes }) => {
+        usePiControl.setState({
+          sandboxes: Object.fromEntries(sandboxes.map((sb) => [sb.id, sb])),
+          sandboxOrder: sandboxes.map((sb) => sb.id),
         });
       })
       .catch(() => undefined);
@@ -170,7 +172,7 @@ export function App() {
         setPaletteOpen((v) => !v);
       } else if (mod && event.key.toLowerCase() === "p") {
         event.preventDefault();
-        if (usePiControl.getState().activeWorkspaceId) setQuickOpenOpen((v) => !v);
+        if (usePiControl.getState().activeSandboxId) setQuickOpenOpen((v) => !v);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -202,6 +204,9 @@ export function App() {
         <span className="app-shortcuts">
           <kbd>Ctrl K</kbd> palette · <kbd>Ctrl P</kbd> files
         </span>
+        <button className="btn btn-icon" title="Settings: providers, models, defaults" onClick={() => setTab("settings")}>
+          ⚙
+        </button>
       </header>
       <div className={`app-body ${sidebarOpen ? "sidebar-visible" : ""}`}>
         <Sidebar />
@@ -211,36 +216,36 @@ export function App() {
               Chat
             </button>
             <button
-              className={`tab ${tab === "files" ? "active" : ""} ${!activeWorkspaceId ? "disabled" : ""}`}
+              className={`tab ${tab === "files" ? "active" : ""} ${!activeSandboxId ? "disabled" : ""}`}
               disabled={!activeWorkspaceId}
               onClick={() => setTab("files")}
-              title={activeWorkspaceId ? "Workspace files" : "Select a workspace first"}
+              title={activeSandboxId ? "Sandbox files" : "Start a sandbox first"}
             >
               Files
             </button>
             <button
-              className={`tab ${tab === "git" ? "active" : ""} ${!activeWorkspaceId ? "disabled" : ""}`}
+              className={`tab ${tab === "git" ? "active" : ""} ${!activeSandboxId ? "disabled" : ""}`}
               disabled={!activeWorkspaceId}
               onClick={() => setTab("git")}
             >
               Git
             </button>
             <button
-              className={`tab ${tab === "terminal" ? "active" : ""} ${!activeWorkspaceId ? "disabled" : ""}`}
+              className={`tab ${tab === "terminal" ? "active" : ""} ${!activeSandboxId ? "disabled" : ""}`}
               disabled={!activeWorkspaceId}
               onClick={() => setTab("terminal")}
             >
               Terminal
             </button>
             <button
-              className={`tab ${tab === "processes" ? "active" : ""} ${!activeWorkspaceId ? "disabled" : ""}`}
+              className={`tab ${tab === "processes" ? "active" : ""} ${!activeSandboxId ? "disabled" : ""}`}
               disabled={!activeWorkspaceId}
               onClick={() => setTab("processes")}
             >
               Processes
             </button>
             <button
-              className={`tab ${tab === "tasks" ? "active" : ""} ${!activeWorkspaceId ? "disabled" : ""}`}
+              className={`tab ${tab === "tasks" ? "active" : ""} ${!activeSandboxId ? "disabled" : ""}`}
               disabled={!activeWorkspaceId}
               onClick={() => setTab("tasks")}
             >
@@ -248,6 +253,9 @@ export function App() {
             </button>
             <button className={`tab ${tab === "trace" ? "active" : ""}`} onClick={() => setTab("trace")}>
               Trace
+            </button>
+            <button className={`tab ${tab === "settings" ? "active" : ""}`} onClick={() => setTab("settings")}>
+              Settings
             </button>
           </div>
           {tab === "chat" && (
@@ -262,6 +270,7 @@ export function App() {
           {tab === "processes" && <ProcessesView />}
           {tab === "tasks" && <TasksView />}
           {tab === "trace" && <TraceView />}
+          {tab === "settings" && <SettingsView />}
         </div>
       </div>
       <StatusBar health={health} />

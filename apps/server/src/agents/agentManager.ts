@@ -62,6 +62,10 @@ export function extractProviderEnv(env: NodeJS.ProcessEnv = process.env): Record
 export class AgentManager {
   private readonly clients = new Map<string, AgentClient>();
   private readonly statuses = new Map<string, AgentStatus>();
+  private readonly endpoints = new Map<string, AgentEndpoint>();
+
+  /** Extra provider credentials (stored settings) merged at connect time. */
+  credentialSource: (() => Record<string, string>) | undefined;
 
   constructor(
     private readonly hub: RealtimeHub,
@@ -70,6 +74,16 @@ export class AgentManager {
     private readonly sessionEventHook?: (sessionId: string, envelope: { type: string; payload: unknown }) => void,
   ) {}
 
+  /** Reconnect every workspace agent so credentials re-forward at hello. */
+  reconnectAll(): void {
+    for (const [workspaceId, client] of this.clients) {
+      client.stop();
+      this.clients.delete(workspaceId);
+      const endpoint = this.endpoints.get(workspaceId);
+      if (endpoint) this.connect(workspaceId, endpoint);
+    }
+  }
+
   /** Start (or restart) the connection for a workspace. */
   connect(workspaceId: string, endpoint: AgentEndpoint): void {
     const existing = this.clients.get(workspaceId);
@@ -77,6 +91,7 @@ export class AgentManager {
       existing.stop();
       this.clients.delete(workspaceId);
     }
+    this.endpoints.set(workspaceId, endpoint);
 
     const status: AgentStatus = { workspaceId, state: "connecting", processes: [] };
     this.statuses.set(workspaceId, status);
@@ -86,7 +101,7 @@ export class AgentManager {
       token: endpoint.token,
       workspaceId,
       logger: this.logger,
-      credentials: extractProviderEnv(),
+      credentials: { ...extractProviderEnv(), ...(this.credentialSource?.() ?? {}) },
       events: {
         onReady: (info) => this.handleReady(workspaceId, status, info),
         onHealth: (health) => this.handleHealth(workspaceId, status, health),

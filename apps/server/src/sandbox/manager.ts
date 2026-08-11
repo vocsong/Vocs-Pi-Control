@@ -1,6 +1,10 @@
 /**
- * SandboxManager — control-plane ownership of projects, workspaces and
- * sandbox containers (plan §4, §18, §21).
+ * SandboxManager — control-plane ownership of workspaces and sandbox
+ * containers (plan §4, §18, §21).
+ *
+ * Terminology: a WORKSPACE is a folder/repository under the workspace root
+ * (DB table `projects`); a SANDBOX is the container instance of a workspace
+ * (DB table `workspaces`); `sandboxes` holds runtime records.
  *
  * The control server owns sandbox lifecycle; Pi agents never receive
  * Podman control (Invariant E). All container operations go through the
@@ -12,19 +16,18 @@ import net from "node:net";
 import crypto from "node:crypto";
 import path from "node:path";
 import { schema, type Db } from "@pi-control/database";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, isNull } from "drizzle-orm";
 import {
   EVENT_TYPES,
-  type ProjectInfo,
+  type SandboxInfo,
+  type SandboxStatus,
   type SandboxStatusPayload,
   type WorkspaceInfo,
-  type WorkspaceStatus,
 } from "@pi-control/protocol";
 import {
   defaultResources,
   type CreateWorkspaceSandboxSpec,
   type RuntimeDetection,
-  type SandboxInfo,
   type SandboxRuntime,
   type SelfTestResult,
 } from "@pi-control/sandbox";
@@ -38,28 +41,34 @@ export interface SandboxManagerOptions {
   runtime: SandboxRuntime;
   hub: RealtimeHub;
   logger: Logger;
-  /** Default image for workspace containers. */
+  /** Default image for sandbox containers. */
   baseImage: string;
-  /** Agent connections for running workspaces. */
+  /** Agent connections for running sandboxes. */
   agents: AgentManager;
   /** Repo root containing images/ (profile Dockerfiles). */
   imagesDir: string;
+  /** Workspace root folder — every workspace must live inside it. */
+  rootFolder: () => string;
 }
 
-export interface CreateProjectInput {
-  name: string;
-  hostRootPath: string;
-}
-
+/** Create a workspace FOLDER under the workspace root. */
 export interface CreateWorkspaceInput {
   name: string;
-  hostPath: string;
+  /** Optional explicit folder (must be inside the root); default: root/name. */
+  hostRootPath?: string;
+}
+
+/** Create a SANDBOX container for a workspace. */
+export interface CreateSandboxInput {
+  name: string;
+  /** Optional explicit folder to mount (must be inside the root); default: the workspace folder. */
+  hostPath?: string;
   securityProfile?: "standard" | "restricted" | "trusted";
   /** Environment profile (plan §11): maps to an image. */
   profile?: "node" | "python" | "universal";
   imageRef?: string;
   resources?: { cpuCores?: number; memoryGiB?: number; pidLimit?: number };
-  /** Worktree workspaces record their branch (plan §14). */
+  /** Worktree sandboxes record their branch (plan §14). */
   kind?: "main" | "worktree" | "directory";
   gitBranch?: string;
 }
@@ -70,14 +79,18 @@ const CONTAINER_WORKSPACE_PATH = "/workspace";
 export const AGENT_CONTAINER_PORT = 4175;
 
 /**
- * Loopback-only dev-port range published for every workspace: dev servers
+ * Loopback-only dev-port range published for every sandbox: dev servers
  * started inside the sandbox on these ports are reachable at
  * http://127.0.0.1:<port> on the host (plan §16.2).
  */
 export const DEV_PORT_RANGE = { hostStart: 43100, containerStart: 43100, count: 20 };
 
-export const DEV_PORT_RANGE_START = DEV_PORT_RANGE.hostStart;
-export const DEV_PORT_RANGE_END = DEV_PORT_RANGE.hostStart + DEV_PORT_RANGE.count - 1;
+/** Environment profile → image reference (plan §11). */
+export function imageForProfile(profile: "node" | "python" | "universal"): string {
+  if (profile === "python") return "pi-control/python:local";
+  if (profile === "universal") return "pi-control/universal:local";
+  return "pi-control/base:local";
+}
 
 /** Allocate a free loopback port for the agent's host-side forward. */
 export async function allocateAgentHostPort(): Promise<number> {
@@ -93,19 +106,6 @@ export async function allocateAgentHostPort(): Promise<number> {
 }
 
 const VOLUME_SUFFIXES = ["home", "state", "cache", "tools"] as const;
-
-/** Environment profile → image reference (plan §11). */
-export function imageForProfile(profile: "node" | "python" | "universal"): string {
-  if (profile === "python") return "pi-control/python:local";
-  if (profile === "universal") return "pi-control/universal:local";
-  return "pi-control/base:local";
-}
-
-export function profileForImage(imageRef: string): "node" | "python" | "universal" {
-  if (imageRef.includes("python")) return "python";
-  if (imageRef.includes("universal")) return "universal";
-  return "node";
-}
 
 export class SandboxManager {
   private detection: RuntimeDetection | null = null;
@@ -179,18 +179,30 @@ export class SandboxManager {
   }
 
   /* ------------------------------------------------------------------ */
-  /* Projects                                                            */
+  /* Workspaces (folders under the workspace root)                       */
   /* ------------------------------------------------------------------ */
 
-  createProject(input: CreateProjectInput): ProjectInfo {
-    const hostRootPath = fs.realpathSync(input.hostRootPath);
+  /**
+   * Create a workspace folder. Containment: the folder must live inside
+   * the workspace root (when omitted, root/<name> is used and created).
+   */
+  createWorkspace(input: CreateWorkspaceInput): WorkspaceInfo {
+    const root = this.options.rootFolder();
+    let hostRootPath: string;
+    if (input.hostRootPath) {
+      hostRootPath = fs.realpathSync(input.hostRootPath);
+      this.assertInsideRoot(hostRootPath, "Workspace folder");
+    } else {
+      hostRootPath = path.join(root, sanitizeName(input.name));
+      fs.mkdirSync(hostRootPath, { recursive: true });
+    }
     const stat = fs.statSync(hostRootPath, { throwIfNoEntry: false });
     if (!stat?.isDirectory()) {
-      throw new Error(`Not a directory: ${input.hostRootPath}`);
+      throw new Error(`Not a directory: ${input.hostRootPath ?? hostRootPath}`);
     }
     const now = nowIso();
     const record = {
-      id: newId("proj"),
+      id: newId("ws"),
       machineId: "machine_local",
       name: input.name,
       hostRootPath,
@@ -201,37 +213,39 @@ export class SandboxManager {
     this.options.db.insert(schema.projects).values(record).run();
     this.options.hub.publish({
       scope: "server",
-      type: EVENT_TYPES.projectCreated,
-      payload: { project: toProjectInfo(record) },
+      type: EVENT_TYPES.workspaceCreated,
+      payload: { workspace: toWorkspaceInfo(record) },
     });
-    return toProjectInfo(record);
+    this.options.logger.info({ workspaceId: record.id, hostRootPath }, "workspace created");
+    return toWorkspaceInfo(record);
   }
 
-  listProjects(): ProjectInfo[] {
-    return this.options.db.select().from(schema.projects).orderBy(desc(schema.projects.createdAt)).all().map(toProjectInfo);
+  listWorkspaces(): WorkspaceInfo[] {
+    return this.options.db.select().from(schema.projects).orderBy(desc(schema.projects.createdAt)).all().map(toWorkspaceInfo);
   }
 
-  projectById(projectId: string): ProjectInfo | null {
-    const row = this.options.db.select().from(schema.projects).where(eq(schema.projects.id, projectId)).get();
-    return row ? toProjectInfo(row) : null;
+  workspaceById(workspaceId: string): WorkspaceInfo | null {
+    const row = this.options.db.select().from(schema.projects).where(eq(schema.projects.id, workspaceId)).get();
+    return row ? toWorkspaceInfo(row) : null;
   }
 
   /* ------------------------------------------------------------------ */
-  /* Workspaces                                                          */
+  /* Sandboxes (containers)                                              */
   /* ------------------------------------------------------------------ */
 
-  async createWorkspace(projectId: string, input: CreateWorkspaceInput): Promise<WorkspaceInfo> {
-    const project = this.options.db.select().from(schema.projects).where(eq(schema.projects.id, projectId)).get();
-    if (!project) throw new Error(`Unknown project ${projectId}`);
+  async createSandbox(workspaceId: string, input: CreateSandboxInput): Promise<SandboxInfo> {
+    const workspace = this.options.db.select().from(schema.projects).where(eq(schema.projects.id, workspaceId)).get();
+    if (!workspace) throw new Error(`Unknown workspace ${workspaceId}`);
 
-    const hostPath = fs.realpathSync(input.hostPath);
+    const hostPath = input.hostPath ? fs.realpathSync(input.hostPath) : workspace.hostRootPath;
+    this.assertInsideRoot(hostPath, "Sandbox folder");
     const stat = fs.statSync(hostPath, { throwIfNoEntry: false });
     if (!stat?.isDirectory()) {
-      throw new Error(`Not a directory: ${input.hostPath}`);
+      throw new Error(`Not a directory: ${hostPath}`);
     }
 
-    const workspaceId = newId("ws");
-    const containerName = `pi-control-${workspaceId}`;
+    const sandboxId = newId("sbx");
+    const containerName = `pi-control-${sandboxId}`;
     const imageRef = input.imageRef ?? imageForProfile(input.profile ?? "node");
     const capacity = await this.options.runtime.capacity();
     const defaults = defaultResources(capacity);
@@ -244,12 +258,12 @@ export class SandboxManager {
     const agentHostPort = await allocateAgentHostPort();
 
     const spec: CreateWorkspaceSandboxSpec = {
-      workspaceId,
+      workspaceId: sandboxId,
       containerName,
       imageRef,
       workspaceMount: { hostPath, containerPath: CONTAINER_WORKSPACE_PATH },
       volumes: VOLUME_SUFFIXES.map((suffix) => ({
-        name: `pi-control-${workspaceId}-${suffix}`,
+        name: `pi-control-${sandboxId}-${suffix}`,
         containerPath: suffix === "home" ? "/home/pi" : `/${suffix}`,
         kind: "volume",
       })),
@@ -267,30 +281,30 @@ export class SandboxManager {
         PI_CONTROL_AGENT_TOKEN: agentToken,
         PI_CONTROL_AGENT_PORT: String(AGENT_CONTAINER_PORT),
         PI_CONTROL_AGENT_HOST: "0.0.0.0",
-        PI_CONTROL_WORKSPACE_ID: workspaceId,
+        PI_CONTROL_WORKSPACE_ID: sandboxId,
       },
     };
 
     this.options.hub.publish({
       scope: "server",
-      type: EVENT_TYPES.workspaceState,
-      payload: { workspaceId, status: "building" },
+      type: EVENT_TYPES.sandboxState,
+      payload: { sandboxId, status: "building" },
     });
 
-    let sandbox: SandboxInfo;
+    let sandbox: Awaited<ReturnType<SandboxRuntime["createWorkspace"]>>;
     try {
       sandbox = await this.options.runtime.createWorkspace(spec);
       this.options.runtime.registerSandbox(sandbox.id, containerName);
     } catch (error) {
-      this.publishWorkspaceError(workspaceId, error);
+      this.publishSandboxError(sandboxId, error);
       throw error;
     }
 
     const now = nowIso();
     this.options.db.insert(schema.workspaces).values({
-      id: workspaceId,
-      projectId,
-      machineId: project.machineId,
+      id: sandboxId,
+      projectId: workspaceId,
+      machineId: workspace.machineId,
       name: input.name,
       hostPath,
       containerWorkspacePath: CONTAINER_WORKSPACE_PATH,
@@ -303,7 +317,7 @@ export class SandboxManager {
 
     this.options.db.insert(schema.sandboxes).values({
       id: sandbox.id,
-      workspaceId,
+      workspaceId: sandboxId,
       runtime: sandbox.runtime,
       containerName,
       containerId: sandbox.containerId,
@@ -315,61 +329,61 @@ export class SandboxManager {
       updatedAt: now,
     }).run();
 
-    const info = await this.workspaceInfo(workspaceId, "stopped");
+    const info = await this.sandboxInfo(sandboxId, "stopped");
     this.options.hub.publish({
       scope: "server",
-      type: EVENT_TYPES.workspaceCreated,
-      payload: { workspaceId, workspace: info },
+      type: EVENT_TYPES.sandboxCreated,
+      payload: { sandboxId, sandbox: info },
     });
-    this.options.logger.info({ workspaceId, containerName, hostPath }, "workspace created");
+    this.options.logger.info({ sandboxId, containerName, hostPath }, "sandbox created");
     return info;
   }
 
-  async startWorkspace(workspaceId: string): Promise<WorkspaceInfo> {
-    const sandbox = this.requireSandbox(workspaceId);
-    this.setWorkspaceState(workspaceId, "starting");
+  async startSandbox(sandboxId: string): Promise<SandboxInfo> {
+    const sandbox = this.requireSandbox(sandboxId);
+    this.setSandboxState(sandboxId, "starting");
     try {
       await this.options.runtime.startWorkspace(sandbox.id);
-      this.setWorkspaceState(workspaceId, "running");
+      this.setSandboxState(sandboxId, "running");
       this.updateSandboxState(sandbox.id, "running");
-      this.connectAgent(workspaceId, sandbox.id);
+      this.connectAgent(sandboxId, sandbox.id);
     } catch (error) {
-      this.setWorkspaceState(workspaceId, "error");
+      this.setSandboxState(sandboxId, "error");
       this.updateSandboxState(sandbox.id, "error");
-      this.publishWorkspaceError(workspaceId, error);
+      this.publishSandboxError(sandboxId, error);
       throw error;
     }
-    return this.workspaceInfo(workspaceId, "running");
+    return this.sandboxInfo(sandboxId, "running");
   }
 
-  async stopWorkspace(workspaceId: string): Promise<WorkspaceInfo> {
-    const sandbox = this.requireSandbox(workspaceId);
-    this.options.agents.disconnect(workspaceId);
-    this.setWorkspaceState(workspaceId, "stopping");
+  async stopSandbox(sandboxId: string): Promise<SandboxInfo> {
+    const sandbox = this.requireSandbox(sandboxId);
+    this.options.agents.disconnect(sandboxId);
+    this.setSandboxState(sandboxId, "stopping");
     try {
       await this.options.runtime.stopWorkspace(sandbox.id);
-      this.setWorkspaceState(workspaceId, "stopped");
+      this.setSandboxState(sandboxId, "stopped");
       this.updateSandboxState(sandbox.id, "stopped");
     } catch (error) {
-      this.publishWorkspaceError(workspaceId, error);
+      this.publishSandboxError(sandboxId, error);
       throw error;
     }
-    return this.workspaceInfo(workspaceId, "stopped");
+    return this.sandboxInfo(sandboxId, "stopped");
   }
 
-  async removeWorkspace(workspaceId: string): Promise<void> {
-    const sandbox = this.requireSandbox(workspaceId);
+  async removeSandbox(sandboxId: string): Promise<void> {
+    const sandbox = this.requireSandbox(sandboxId);
     try {
       await this.options.runtime.removeWorkspace(sandbox.id);
     } catch (error) {
-      this.options.logger.warn({ workspaceId, error: String(error) }, "container removal failed; continuing");
+      this.options.logger.warn({ sandboxId, error: String(error) }, "container removal failed; continuing");
     }
-    // Keep workspace row (archived); container is gone. Persistent volumes
-    // survive for session recovery (plan §9.2).
+    // Keep the workspace row (archived); container is gone. Persistent
+    // volumes survive for session recovery (plan §9.2).
     this.options.db
       .update(schema.workspaces)
       .set({ archivedAt: nowIso(), sandboxId: null })
-      .where(eq(schema.workspaces.id, workspaceId))
+      .where(eq(schema.workspaces.id, sandboxId))
       .run();
     this.options.db.update(schema.sandboxes).set({ state: "missing" }).where(eq(schema.sandboxes.id, sandbox.id)).run();
   }
@@ -380,11 +394,11 @@ export class SandboxManager {
    * persistent volumes, reconnect the agent. Native Pi sessions persist in
    * /state and can be resumed.
    */
-  async rebuildWorkspace(workspaceId: string, profile?: "node" | "python" | "universal"): Promise<WorkspaceInfo> {
-    const workspace = this.options.db.select().from(schema.workspaces).where(eq(schema.workspaces.id, workspaceId)).get();
-    if (!workspace) throw new Error(`Unknown workspace ${workspaceId}`);
-    const sandboxRow = this.options.db.select().from(schema.sandboxes).where(eq(schema.sandboxes.id, workspace.sandboxId ?? "")).get();
-    if (!sandboxRow) throw new Error(`Workspace ${workspaceId} has no sandbox`);
+  async rebuildSandbox(sandboxId: string, profile?: "node" | "python" | "universal"): Promise<SandboxInfo> {
+    const container = this.options.db.select().from(schema.workspaces).where(eq(schema.workspaces.id, sandboxId)).get();
+    if (!container) throw new Error(`Unknown sandbox ${sandboxId}`);
+    const sandboxRow = this.options.db.select().from(schema.sandboxes).where(eq(schema.sandboxes.id, container.sandboxId ?? "")).get();
+    if (!sandboxRow) throw new Error(`Sandbox ${sandboxId} has no runtime record`);
 
     const spec = JSON.parse(sandboxRow.configJson) as CreateWorkspaceSandboxSpec;
     if (profile) {
@@ -392,8 +406,8 @@ export class SandboxManager {
       await this.ensureProfileImage(profile);
     }
 
-    this.options.agents.disconnect(workspaceId);
-    this.setWorkspaceState(workspaceId, "building");
+    this.options.agents.disconnect(sandboxId);
+    this.setSandboxState(sandboxId, "building");
     try {
       await this.options.runtime.stopWorkspace(sandboxRow.id).catch(() => undefined);
       await this.options.runtime.removeWorkspace(sandboxRow.id);
@@ -408,25 +422,89 @@ export class SandboxManager {
 
       await this.options.runtime.startWorkspace(rebuilt.id);
       this.updateSandboxState(rebuilt.id, "running");
-      this.connectAgent(workspaceId, rebuilt.id);
+      this.connectAgent(sandboxId, rebuilt.id);
 
       // Agent-side Pi sessions were lost with the old container; native
       // session files persist in /state — mark rows stopped for explicit resume.
       this.options.db
         .update(schema.sessions)
         .set({ status: "stopped", updatedAt: nowIso() })
-        .where(eq(schema.sessions.workspaceId, workspaceId))
+        .where(eq(schema.sessions.workspaceId, sandboxId))
         .run();
 
-      this.setWorkspaceState(workspaceId, "running");
-      this.options.logger.info({ workspaceId, imageRef: spec.imageRef }, "workspace rebuilt");
+      this.setSandboxState(sandboxId, "running");
+      this.options.logger.info({ sandboxId, imageRef: spec.imageRef }, "sandbox rebuilt");
     } catch (error) {
-      this.setWorkspaceState(workspaceId, "error");
-      this.publishWorkspaceError(workspaceId, error);
+      this.setSandboxState(sandboxId, "error");
+      this.publishSandboxError(sandboxId, error);
       throw error;
     }
-    return this.workspaceInfo(workspaceId, "running");
+    return this.sandboxInfo(sandboxId, "running");
   }
+
+  listSandboxes(workspaceId?: string): SandboxInfo[] {
+    const rows = workspaceId
+      ? this.options.db.select().from(schema.workspaces).where(eq(schema.workspaces.projectId, workspaceId)).all()
+      : this.options.db.select().from(schema.workspaces).all();
+    return rows.map((row) => this.toSandboxInfo(row));
+  }
+
+  async sandboxInfo(sandboxId: string, fallbackStatus?: SandboxStatus): Promise<SandboxInfo> {
+    const row = this.options.db.select().from(schema.workspaces).where(eq(schema.workspaces.id, sandboxId)).get();
+    if (!row) throw new Error(`Unknown sandbox ${sandboxId}`);
+    return this.toSandboxInfo(row, fallbackStatus);
+  }
+
+  /** Re-register persisted sandboxes after a server restart. */
+  restoreSandboxes(): void {
+    const rows = this.options.db.select().from(schema.sandboxes).where(eq(schema.sandboxes.state, "running")).all();
+    for (const row of rows) {
+      this.options.runtime.registerSandbox(row.id, row.containerName);
+    }
+  }
+
+  /**
+   * Agent endpoint for a sandbox, parsed from its runtime record
+   * (the token and forwarded port are stored there at creation).
+   */
+  agentEndpoint(sandboxId: string): AgentEndpoint | null {
+    const sandbox = this.options.db
+      .select()
+      .from(schema.sandboxes)
+      .where(eq(schema.sandboxes.workspaceId, sandboxId))
+      .get();
+    if (!sandbox) return null;
+    try {
+      const config = JSON.parse(sandbox.configJson) as {
+        ports?: Array<{ hostPort: number }>;
+        environment?: Record<string, string>;
+      };
+      const hostPort = config.ports?.[0]?.hostPort;
+      const token = config.environment?.PI_CONTROL_AGENT_TOKEN;
+      if (!hostPort || !token) return null;
+      return { url: `ws://127.0.0.1:${hostPort}`, token };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Reconnect agents for running sandboxes after a server restart. */
+  restoreAgents(): void {
+    const rows = this.options.db.select().from(schema.sandboxes).where(eq(schema.sandboxes.state, "running")).all();
+    for (const row of rows) {
+      this.connectAgent(row.workspaceId, row.id);
+    }
+  }
+
+  sandboxCount(): number {
+    return this.options.db.select().from(schema.workspaces).all().length;
+  }
+
+  workspaceCount(): number {
+    return this.options.db.select().from(schema.projects).all().length;
+  }
+
+  /* ------------------------------------------------------------------ */
 
   /** Build the profile image when the runtime is podman and it is missing. */
   private async ensureProfileImage(profile: "node" | "python" | "universal"): Promise<void> {
@@ -450,100 +528,41 @@ export class SandboxManager {
     this.options.logger.info({ profile, imageRef }, "profile image built");
   }
 
-  listWorkspaces(projectId?: string): WorkspaceInfo[] {
-    const rows = projectId
-      ? this.options.db.select().from(schema.workspaces).where(eq(schema.workspaces.projectId, projectId)).all()
-      : this.options.db.select().from(schema.workspaces).all();
-    return rows.map((row) => this.toWorkspaceInfo(row));
-  }
-
-  async workspaceInfo(workspaceId: string, fallbackStatus?: WorkspaceStatus): Promise<WorkspaceInfo> {
-    const row = this.options.db.select().from(schema.workspaces).where(eq(schema.workspaces.id, workspaceId)).get();
-    if (!row) throw new Error(`Unknown workspace ${workspaceId}`);
-    return this.toWorkspaceInfo(row, fallbackStatus);
-  }
-
-  /** Re-register persisted sandboxes after a server restart. */
-  restoreSandboxes(): void {
-    const rows = this.options.db.select().from(schema.sandboxes).where(eq(schema.sandboxes.state, "running")).all();
-    for (const row of rows) {
-      this.options.runtime.registerSandbox(row.id, row.containerName);
+  private assertInsideRoot(realPath: string, what: string): void {
+    const root = fs.realpathSync(this.options.rootFolder());
+    if (realPath !== root && !realPath.startsWith(root + path.sep)) {
+      throw new Error(`${what} must be inside the workspace root: ${root}`);
     }
   }
 
-  /**
-   * Agent endpoint for a workspace, parsed from its sandbox record
-   * (the token and forwarded port are stored there at creation).
-   */
-  agentEndpoint(workspaceId: string): AgentEndpoint | null {
-    const sandbox = this.options.db
-      .select()
-      .from(schema.sandboxes)
-      .where(eq(schema.sandboxes.workspaceId, workspaceId))
-      .get();
-    if (!sandbox) return null;
-    try {
-      const config = JSON.parse(sandbox.configJson) as {
-        ports?: Array<{ hostPort: number }>;
-        environment?: Record<string, string>;
-      };
-      const hostPort = config.ports?.[0]?.hostPort;
-      const token = config.environment?.PI_CONTROL_AGENT_TOKEN;
-      if (!hostPort || !token) return null;
-      return { url: `ws://127.0.0.1:${hostPort}`, token };
-    } catch {
-      return null;
-    }
+  private requireSandbox(sandboxId: string): { id: string; containerName: string } {
+    const row = this.options.db.select().from(schema.workspaces).where(eq(schema.workspaces.id, sandboxId)).get();
+    if (!row) throw new Error(`Unknown sandbox ${sandboxId}`);
+    if (!row.sandboxId) throw new Error(`Sandbox ${sandboxId} has no runtime container`);
+    return { id: row.sandboxId, containerName: `pi-control-${sandboxId}` };
   }
 
-  /** Reconnect agents for running workspaces after a server restart. */
-  restoreAgents(): void {
-    const rows = this.options.db.select().from(schema.sandboxes).where(eq(schema.sandboxes.state, "running")).all();
-    for (const row of rows) {
-      this.connectAgent(row.workspaceId, row.id);
-    }
-  }
-
-  workspaceCount(): number {
-    return this.options.db.select().from(schema.workspaces).all().length;
-  }
-
-  projectCount(): number {
-    return this.options.db.select().from(schema.projects).all().length;
-  }
-
-  /* ------------------------------------------------------------------ */
-
-  private requireSandbox(workspaceId: string): { id: string; containerName: string } {
-    const workspace = this.options.db.select().from(schema.workspaces).where(eq(schema.workspaces.id, workspaceId)).get();
-    if (!workspace) throw new Error(`Unknown workspace ${workspaceId}`);
-    if (!workspace.sandboxId) throw new Error(`Workspace ${workspaceId} has no sandbox`);
-    return { id: workspace.sandboxId, containerName: `pi-control-${workspaceId}` };
-  }
-
-  private setWorkspaceState(workspaceId: string, status: WorkspaceStatus): void {
+  private setSandboxState(sandboxId: string, status: SandboxStatus): void {
     this.options.hub.publish({
-      scope: "workspace",
-      workspaceId,
-      type: EVENT_TYPES.workspaceState,
-      payload: { workspaceId, status },
+      scope: "server",
+      type: EVENT_TYPES.sandboxState,
+      payload: { sandboxId, status },
     });
   }
 
-  private updateSandboxState(sandboxId: string, state: string): void {
+  private updateSandboxState(runtimeSandboxId: string, state: string): void {
     this.options.db
       .update(schema.sandboxes)
       .set({ state, updatedAt: nowIso() })
-      .where(eq(schema.sandboxes.id, sandboxId))
+      .where(eq(schema.sandboxes.id, runtimeSandboxId))
       .run();
   }
 
-  private publishWorkspaceError(workspaceId: string, error: unknown): void {
+  private publishSandboxError(sandboxId: string, error: unknown): void {
     this.options.hub.publish({
-      scope: "workspace",
-      workspaceId,
-      type: EVENT_TYPES.workspaceError,
-      payload: { workspaceId, message: error instanceof Error ? error.message : String(error) },
+      scope: "server",
+      type: EVENT_TYPES.sandboxError,
+      payload: { sandboxId, message: error instanceof Error ? error.message : String(error) },
     });
   }
 
@@ -555,16 +574,16 @@ export class SandboxManager {
     });
   }
 
-  private connectAgent(workspaceId: string, _sandboxId: string): void {
-    const endpoint = this.agentEndpoint(workspaceId);
+  private connectAgent(sandboxId: string, _runtimeSandboxId: string): void {
+    const endpoint = this.agentEndpoint(sandboxId);
     if (!endpoint) {
-      this.options.logger.warn({ workspaceId }, "workspace has no agent endpoint; skipping agent connection");
+      this.options.logger.warn({ sandboxId }, "sandbox has no agent endpoint; skipping agent connection");
       return;
     }
-    this.options.agents.connect(workspaceId, endpoint);
+    this.options.agents.connect(sandboxId, endpoint);
   }
 
-  private toWorkspaceInfo(
+  private toSandboxInfo(
     row: {
       id: string;
       projectId: string;
@@ -579,19 +598,18 @@ export class SandboxManager {
       createdAt: string;
       archivedAt: string | null;
     },
-    fallbackStatus?: WorkspaceStatus,
-  ): WorkspaceInfo {
+    fallbackStatus?: SandboxStatus,
+  ): SandboxInfo {
     return {
       id: row.id,
-      projectId: row.projectId,
+      workspaceId: row.projectId,
       machineId: row.machineId,
       name: row.name,
       hostPath: row.hostPath,
       containerWorkspacePath: row.containerWorkspacePath,
-      kind: row.kind as WorkspaceInfo["kind"],
+      kind: row.kind as SandboxInfo["kind"],
       gitBranch: row.gitBranch ?? undefined,
-      securityProfile: row.securityProfile as WorkspaceInfo["securityProfile"],
-      sandboxId: row.sandboxId ?? undefined,
+      securityProfile: row.securityProfile as SandboxInfo["securityProfile"],
       status: fallbackStatus ?? (row.archivedAt ? "missing" : "stopped"),
       createdAt: row.createdAt,
       archivedAt: row.archivedAt ?? undefined,
@@ -599,7 +617,13 @@ export class SandboxManager {
   }
 }
 
-function toProjectInfo(row: {
+function sanitizeName(name: string): string {
+  const cleaned = name.trim().replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-+/g, "-");
+  if (!cleaned) throw new Error("Invalid name");
+  return cleaned;
+}
+
+function toWorkspaceInfo(row: {
   id: string;
   machineId: string;
   name: string;
@@ -607,7 +631,7 @@ function toProjectInfo(row: {
   gitRepositoryRoot: string | null;
   createdAt: string;
   lastOpenedAt: string | null;
-}): ProjectInfo {
+}): WorkspaceInfo {
   return {
     id: row.id,
     machineId: row.machineId,

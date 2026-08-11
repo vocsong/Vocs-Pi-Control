@@ -26,10 +26,10 @@ function labelOf(code: string): string {
 }
 
 export function GitView() {
-  const activeWorkspaceId = usePiControl((s) => s.activeWorkspaceId);
+  const activeSandboxId = usePiControl((s) => s.activeSandboxId);
+  const sandboxes = usePiControl((s) => s.sandboxes);
   const workspaces = usePiControl((s) => s.workspaces);
-  const projects = usePiControl((s) => s.projects);
-  const workspace = activeWorkspaceId ? workspaces[activeWorkspaceId] : undefined;
+  const sandbox = activeSandboxId ? sandboxes[activeSandboxId] : undefined;
 
   const [sub, setSub] = useState<SubTab>("changes");
   const [status, setStatus] = useState<GitStatus | null>(null);
@@ -44,50 +44,50 @@ export function GitView() {
   const [busy, setBusy] = useState(false);
 
   const loadStatus = useCallback(async () => {
-    if (!activeWorkspaceId) return;
+    if (!activeSandboxId) return;
     try {
-      const event = await api.gitStatus(activeWorkspaceId);
+      const event = await api.gitStatus(activeSandboxId);
       setStatus(event as GitStatus);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [activeWorkspaceId]);
+  }, [activeSandboxId]);
 
   const loadLog = useCallback(async () => {
-    if (!activeWorkspaceId) return;
+    if (!activeSandboxId) return;
     try {
-      setLog((await api.gitLog(activeWorkspaceId)) as AgentGitLogEntry[]);
+      setLog((await api.gitLog(activeSandboxId)) as AgentGitLogEntry[]);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [activeWorkspaceId]);
+  }, [activeSandboxId]);
 
   const loadBranches = useCallback(async () => {
-    if (!activeWorkspaceId) return;
+    if (!activeSandboxId) return;
     try {
-      setBranches((await api.gitBranches(activeWorkspaceId)) as { current: string; branches: AgentGitBranch[] });
+      setBranches((await api.gitBranches(activeSandboxId)) as { current: string; branches: AgentGitBranch[] });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [activeWorkspaceId]);
+  }, [activeSandboxId]);
 
   useEffect(() => {
     setStatus(null);
     setLog([]);
     setDiff("");
     setCommitMsg("");
-    if (activeWorkspaceId) {
+    if (activeSandboxId) {
       void loadStatus();
       void loadLog();
       void loadBranches();
     }
-  }, [activeWorkspaceId, loadStatus, loadLog, loadBranches]);
+  }, [activeSandboxId, loadStatus, loadLog, loadBranches]);
 
   const showDiff = async (staged: boolean) => {
-    if (!activeWorkspaceId) return;
+    if (!activeSandboxId) return;
     setDiffStaged(staged);
     try {
-      const event = await api.gitDiff(activeWorkspaceId, staged);
+      const event = await api.gitDiff(activeSandboxId, staged);
       setDiff((event as { diff: string }).diff);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -109,11 +109,11 @@ export function GitView() {
     }
   };
 
-  if (!workspace) {
-    return <div className="files-empty">Select a workspace to see its Git state.</div>;
+  if (!sandbox) {
+    return <div className="files-empty">Start a sandbox to see its Git state.</div>;
   }
 
-  const project = workspace.projectId ? projects[workspace.projectId] : undefined;
+  const workspace = sandbox.workspaceId ? workspaces[sandbox.workspaceId] : undefined;
 
   return (
     <div className="git-view">
@@ -148,11 +148,11 @@ export function GitView() {
                 </span>
                 <span className="git-change-actions">
                   {change.staged ? (
-                    <button className="btn btn-small" disabled={busy} onClick={() => void act(() => api.gitUnstage(activeWorkspaceId!, [change.path]))}>
+                    <button className="btn btn-small" disabled={busy} onClick={() => void act(() => api.gitUnstage(activeSandboxId!, [change.path]))}>
                       Unstage
                     </button>
                   ) : (
-                    <button className="btn btn-small" disabled={busy} onClick={() => void act(() => api.gitStage(activeWorkspaceId!, [change.path]))}>
+                    <button className="btn btn-small" disabled={busy} onClick={() => void act(() => api.gitStage(activeSandboxId!, [change.path]))}>
                       Stage
                     </button>
                   )}
@@ -161,7 +161,7 @@ export function GitView() {
             ))}
             {status && status.changes.length > 0 && (
               <div className="git-changes-actions">
-                <button className="btn btn-small" disabled={busy} onClick={() => void act(() => api.gitStage(activeWorkspaceId!, status.changes.filter((c) => !c.staged).map((c) => c.path)))}>
+                <button className="btn btn-small" disabled={busy} onClick={() => void act(() => api.gitStage(activeSandboxId!, status.changes.filter((c) => !c.staged).map((c) => c.path)))}>
                   Stage all
                 </button>
                 <div className="git-commit-box">
@@ -169,12 +169,12 @@ export function GitView() {
                     placeholder="Commit message"
                     value={commitMsg}
                     onChange={(e) => setCommitMsg(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && commitMsg.trim() && void act(() => api.gitCommit(activeWorkspaceId!, commitMsg.trim()))}
+                    onKeyDown={(e) => e.key === "Enter" && commitMsg.trim() && void act(() => api.gitCommit(activeSandboxId!, commitMsg.trim()))}
                   />
                   <button
                     className="btn btn-small btn-primary"
                     disabled={busy || !commitMsg.trim()}
-                    onClick={() => void act(() => api.gitCommit(activeWorkspaceId!, commitMsg.trim()))}
+                    onClick={() => void act(() => api.gitCommit(activeSandboxId!, commitMsg.trim()))}
                   >
                     Commit
                   </button>
@@ -217,7 +217,7 @@ export function GitView() {
             <button
               className="btn btn-small"
               disabled={busy || !newBranch.trim()}
-              onClick={() => void act(() => api.gitBranchCreate(activeWorkspaceId!, newBranch.trim()))}
+              onClick={() => void act(() => api.gitBranchCreate(activeSandboxId!, newBranch.trim()))}
             >
               Create + checkout
             </button>
@@ -238,12 +238,12 @@ export function GitView() {
             <input placeholder="Worktree name (e.g. feature-auth)" value={newWorktree} onChange={(e) => setNewWorktree(e.target.value)} />
             <button
               className="btn btn-small btn-primary"
-              disabled={busy || !newWorktree.trim() || !project}
-              title={project ? "Creates a git worktree + a new workspace/container" : "Project missing"}
+              disabled={busy || !newWorktree.trim() || !workspace}
+              title={workspace ? "Creates a git worktree + a new sandbox" : "Workspace missing"}
               onClick={() => {
-                if (!project) return;
+                if (!workspace) return;
                 void act(async () => {
-                  await api.createWorktree(project.id, { name: newWorktree.trim() });
+                  await api.createWorktree(workspace.id, { name: newWorktree.trim() });
                   setNewWorktree("");
                 });
               }}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ProjectInfo, WorkspaceInfo } from "@pi-control/protocol";
+import type { SandboxInfo, WorkspaceInfo } from "@pi-control/protocol";
 import { usePiControl } from "../store";
 import { api } from "../api";
 
@@ -17,7 +17,7 @@ const STATUS_DOT: Record<string, string> = {
   error: "✕",
 };
 
-const WORKSPACE_STATUS: Record<string, { dot: string; cls: string }> = {
+const SANDBOX_STATUS: Record<string, { dot: string; cls: string }> = {
   running: { dot: "●", cls: "status-running" },
   starting: { dot: "◌", cls: "status-waiting" },
   stopping: { dot: "◌", cls: "status-waiting" },
@@ -31,63 +31,19 @@ const WORKSPACE_STATUS: Record<string, { dot: string; cls: string }> = {
 /* Inline forms                                                        */
 /* ------------------------------------------------------------------ */
 
-function AddProjectForm({ onDone }: { onDone: () => void }) {
-  const createProject = usePiControl((s) => s.createProject);
-  const [name, setName] = useState("");
-  const [path, setPath] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const submit = async () => {
-    if (!name.trim() || !path.trim()) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await createProject(name.trim(), path.trim());
-      onDone();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="inline-form">
-      <input placeholder="Project name" value={name} onChange={(e) => setName(e.target.value)} />
-      <input
-        placeholder="Folder path (e.g. C:/Projects/my-app)"
-        value={path}
-        onChange={(e) => setPath(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && void submit()}
-      />
-      {error && <div className="form-error">{error}</div>}
-      <div className="form-actions">
-        <button className="btn btn-small" onClick={() => void submit()} disabled={busy}>
-          Add project
-        </button>
-        <button className="btn btn-small" onClick={onDone}>
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function AddWorkspaceForm({ projectId, onDone }: { projectId: string; onDone: () => void }) {
+function AddWorkspaceForm({ onDone }: { onDone: () => void }) {
   const createWorkspace = usePiControl((s) => s.createWorkspace);
   const [name, setName] = useState("");
-  const [path, setPath] = useState("");
-  const [profile, setProfile] = useState("node");
+  const [subfolder, setSubfolder] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const submit = async () => {
-    if (!name.trim() || !path.trim()) return;
+    if (!name.trim()) return;
     setBusy(true);
     setError(null);
     try {
-      await createWorkspace(name.trim(), path.trim(), profile as "node" | "python" | "universal");
+      await createWorkspace(name.trim(), subfolder.trim() || undefined);
       onDone();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -98,21 +54,13 @@ function AddWorkspaceForm({ projectId, onDone }: { projectId: string; onDone: ()
 
   return (
     <div className="inline-form">
-      <input placeholder="Workspace name (e.g. main)" value={name} onChange={(e) => setName(e.target.value)} />
+      <input placeholder="Workspace name (e.g. my-app)" value={name} onChange={(e) => setName(e.target.value)} />
       <input
-        placeholder="Folder path (e.g. C:/Projects/my-app)"
-        value={path}
-        onChange={(e) => setPath(e.target.value)}
+        placeholder="Subfolder under root (optional, default: root/name)"
+        value={subfolder}
+        onChange={(e) => setSubfolder(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && void submit()}
       />
-      <label className="form-label">
-        Environment
-        <select value={profile} onChange={(e) => setProfile(e.target.value)}>
-          <option value="node">Node</option>
-          <option value="python">Node + Python</option>
-          <option value="universal">Universal (build tools, ffmpeg)</option>
-        </select>
-      </label>
       {error && <div className="form-error">{error}</div>}
       <div className="form-actions">
         <button className="btn btn-small" onClick={() => void submit()} disabled={busy}>
@@ -126,22 +74,67 @@ function AddWorkspaceForm({ projectId, onDone }: { projectId: string; onDone: ()
   );
 }
 
+function AddSandboxForm({ workspaceId, onDone }: { workspaceId: string; onDone: () => void }) {
+  const createSandbox = usePiControl((s) => s.createSandbox);
+  const [name, setName] = useState("");
+  const [profile, setProfile] = useState("node");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    if (!name.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await createSandbox(name.trim(), undefined, profile as "node" | "python" | "universal");
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="inline-form">
+      <input placeholder="Sandbox name (e.g. main)" value={name} onChange={(e) => setName(e.target.value)} />
+      <label className="form-label">
+        Environment
+        <select value={profile} onChange={(e) => setProfile(e.target.value)}>
+          <option value="node">Node</option>
+          <option value="python">Node + Python</option>
+          <option value="universal">Universal (build tools, ffmpeg)</option>
+        </select>
+      </label>
+      {error && <div className="form-error">{error}</div>}
+      <div className="form-actions">
+        <button className="btn btn-small" onClick={() => void submit()} disabled={busy}>
+          Add sandbox
+        </button>
+        <button className="btn btn-small" onClick={onDone}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
-/* Workspace node                                                      */
+/* Sandbox node (container)                                            */
 /* ------------------------------------------------------------------ */
 
-function WorkspaceNode({ workspace }: { workspace: WorkspaceInfo }) {
-  const activeWorkspaceId = usePiControl((s) => s.activeWorkspaceId);
-  const setActiveWorkspace = usePiControl((s) => s.setActiveWorkspace);
-  const startWorkspace = usePiControl((s) => s.startWorkspace);
-  const stopWorkspace = usePiControl((s) => s.stopWorkspace);
-  const removeWorkspace = usePiControl((s) => s.removeWorkspace);
+function SandboxNode({ sandbox }: { sandbox: SandboxInfo }) {
+  const activeSandboxId = usePiControl((s) => s.activeSandboxId);
+  const setActiveSandbox = usePiControl((s) => s.setActiveSandbox);
+  const startSandbox = usePiControl((s) => s.startSandbox);
+  const stopSandbox = usePiControl((s) => s.stopSandbox);
+  const removeSandbox = usePiControl((s) => s.removeSandbox);
   const createWorkspaceSession = usePiControl((s) => s.createWorkspaceSession);
   const [busy, setBusy] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [rebuilding, setRebuilding] = useState(false);
 
-  const status = WORKSPACE_STATUS[workspace.status] ?? WORKSPACE_STATUS.stopped!;
+  const status = SANDBOX_STATUS[sandbox.status] ?? SANDBOX_STATUS.stopped!;
 
   const act = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -157,8 +150,8 @@ function WorkspaceNode({ workspace }: { workspace: WorkspaceInfo }) {
   const rebuild = async () => {
     setRebuilding(true);
     try {
-      const { workspace: rebuilt } = await api.rebuildWorkspace(workspace.id);
-      usePiControl.setState((s) => ({ workspaces: { ...s.workspaces, [workspace.id]: rebuilt } }));
+      const { sandbox: rebuilt } = await api.rebuildSandbox(sandbox.id);
+      usePiControl.setState((s) => ({ sandboxes: { ...s.sandboxes, [sandbox.id]: rebuilt } }));
     } catch (e) {
       console.error(e);
     } finally {
@@ -167,32 +160,32 @@ function WorkspaceNode({ workspace }: { workspace: WorkspaceInfo }) {
   };
 
   return (
-    <li className={`workspace-node ${workspace.id === activeWorkspaceId ? "active" : ""}`}>
-      <div className="workspace-row">
-        <button className="workspace-main" onClick={() => setActiveWorkspace(workspace.id)}>
+    <li className={`sandbox-node ${sandbox.id === activeSandboxId ? "active" : ""}`}>
+      <div className="sandbox-row">
+        <button className="sandbox-main" onClick={() => setActiveSandbox(sandbox.id)}>
           <span className={`status-dot ${status.cls}`}>{status.dot}</span>
-          <span className="workspace-name">{workspace.name}</span>
-          <span className="workspace-profile">{workspace.securityProfile}</span>
+          <span className="sandbox-name">{sandbox.name}</span>
+          <span className="sandbox-profile">{sandbox.securityProfile}</span>
         </button>
-        <span className="workspace-actions">
+        <span className="sandbox-actions">
           <button
             className="btn btn-icon"
             title="New Pi session"
-            disabled={busy}
-            onClick={() => void act(() => createWorkspaceSession(workspace.id))}
+            disabled={busy || sandbox.status !== "running"}
+            onClick={() => void act(() => createWorkspaceSession(sandbox.id))}
           >
             +
           </button>
-          {workspace.status === "running" ? (
-            <button className="btn btn-icon" title="Stop" disabled={busy} onClick={() => void act(() => stopWorkspace(workspace.id))}>
+          {sandbox.status === "running" ? (
+            <button className="btn btn-icon" title="Stop" disabled={busy} onClick={() => void act(() => stopSandbox(sandbox.id))}>
               ■
             </button>
           ) : (
             <button
               className="btn btn-icon"
               title="Start"
-              disabled={busy || workspace.status === "starting"}
-              onClick={() => void act(() => startWorkspace(workspace.id))}
+              disabled={busy || sandbox.status === "starting"}
+              onClick={() => void act(() => startSandbox(sandbox.id))}
             >
               ▶
             </button>
@@ -200,7 +193,7 @@ function WorkspaceNode({ workspace }: { workspace: WorkspaceInfo }) {
           <button
             className="btn btn-icon"
             title="Rebuild environment (preserves /workspace + volumes)"
-            disabled={busy || rebuilding || workspace.status === "building"}
+            disabled={busy || rebuilding || sandbox.status === "building"}
             onClick={() => void rebuild()}
           >
             {rebuilding ? "…" : "⟳"}
@@ -209,7 +202,7 @@ function WorkspaceNode({ workspace }: { workspace: WorkspaceInfo }) {
             <button
               className="btn btn-icon btn-danger"
               title="Confirm remove"
-              onClick={() => void act(() => removeWorkspace(workspace.id))}
+              onClick={() => void act(() => removeSandbox(sandbox.id))}
             >
               ✓
             </button>
@@ -220,51 +213,52 @@ function WorkspaceNode({ workspace }: { workspace: WorkspaceInfo }) {
           )}
         </span>
       </div>
-      {workspace.hostPath && <div className="workspace-path">{workspace.hostPath}</div>}
+      {sandbox.hostPath && <div className="sandbox-path">{sandbox.hostPath}</div>}
     </li>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* Project node                                                        */
+/* Workspace node (folder)                                             */
 /* ------------------------------------------------------------------ */
 
-function ProjectNode({ project }: { project: ProjectInfo }) {
-  const workspaces = usePiControl((s) => s.workspaces);
-  const workspaceOrder = usePiControl((s) => s.workspaceOrder);
-  const activeProjectId = usePiControl((s) => s.activeProjectId);
-  const setActiveProject = usePiControl((s) => s.setActiveProject);
+function WorkspaceNode({ workspace }: { workspace: WorkspaceInfo }) {
+  const sandboxes = usePiControl((s) => s.sandboxes);
+  const sandboxOrder = usePiControl((s) => s.sandboxOrder);
+  const activeWorkspaceId = usePiControl((s) => s.activeWorkspaceId);
+  const setActiveWorkspace = usePiControl((s) => s.setActiveWorkspace);
   const [expanded, setExpanded] = useState(true);
   const [adding, setAdding] = useState(false);
 
-  const projectWorkspaces = workspaceOrder.filter((id) => workspaces[id]?.projectId === project.id);
+  const workspaceSandboxes = sandboxOrder.filter((id) => sandboxes[id]?.workspaceId === workspace.id);
 
   return (
-    <li className={`project-node ${project.id === activeProjectId ? "active" : ""}`}>
+    <li className={`project-node ${workspace.id === activeWorkspaceId ? "active" : ""}`}>
       <div className="project-row">
         <button
           className="project-main"
           onClick={() => {
-            setActiveProject(project.id);
+            setActiveWorkspace(workspace.id);
             setExpanded((v) => !v);
           }}
         >
           <span className="project-caret">{expanded ? "▾" : "▸"}</span>
-          <span className="project-name">{project.name}</span>
+          <span className="project-name">{workspace.name}</span>
         </button>
         <span className="project-actions">
-          <button className="btn btn-icon" title="Add workspace" onClick={() => setAdding((v) => !v)}>
+          <button className="btn btn-icon" title="Add sandbox" onClick={() => setAdding((v) => !v)}>
             +
           </button>
         </span>
       </div>
+      <div className="workspace-path">{workspace.hostRootPath}</div>
       {expanded && (
-        <ul className="workspace-list">
-          {projectWorkspaces.map((id) => {
-            const workspace = workspaces[id];
-            return workspace ? <WorkspaceNode key={id} workspace={workspace} /> : null;
+        <ul className="sandbox-list">
+          {workspaceSandboxes.map((id) => {
+            const sandbox = sandboxes[id];
+            return sandbox ? <SandboxNode key={id} sandbox={sandbox} /> : null;
           })}
-          {adding && <AddWorkspaceForm projectId={project.id} onDone={() => setAdding(false)} />}
+          {adding && <AddSandboxForm workspaceId={workspace.id} onDone={() => setAdding(false)} />}
         </ul>
       )}
     </li>
@@ -291,14 +285,12 @@ function SandboxPanel() {
     <div className="sandbox-panel">
       <button className="sandbox-header" onClick={() => setExpanded((v) => !v)}>
         <span className={`sandbox-dot ${ready ? "ok" : sandbox.detected ? "warn" : "bad"}`}>●</span>
-        <span>Sandbox: {sandbox.runtime}</span>
+        <span>Runtime: {sandbox.runtime}</span>
         <span className="project-caret">{expanded ? "▾" : "▸"}</span>
       </button>
       {expanded && (
         <div className="sandbox-body">
-          <div className="sandbox-line">
-            {sandbox.detected ? `Podman ${sandbox.version ?? ""}`.trim() : "Podman not detected"}
-          </div>
+          <div className="sandbox-line">{sandbox.detected ? `Podman ${sandbox.version ?? ""}`.trim() : "Podman not detected"}</div>
           {sandbox.machineRequired && (
             <div className="sandbox-line">
               Machine: {sandbox.machineConfigured ? (sandbox.machineRunning ? "running" : "stopped") : "not configured"}
@@ -339,28 +331,30 @@ export function Sidebar() {
   const activeSessionId = usePiControl((s) => s.activeSessionId);
   const setActive = usePiControl((s) => s.setActive);
   const createSession = usePiControl((s) => s.createSession);
-  const projects = usePiControl((s) => s.projects);
-  const projectOrder = usePiControl((s) => s.projectOrder);
-  const [addingProject, setAddingProject] = useState(false);
+  const workspaces = usePiControl((s) => s.workspaces);
+  const workspaceOrder = usePiControl((s) => s.workspaceOrder);
+  const [addingWorkspace, setAddingWorkspace] = useState(false);
 
   return (
     <aside className="sidebar">
       <div className="sidebar-section">
         <div className="sidebar-section-header">
-          <span>Projects</span>
-          <button className="btn btn-small" onClick={() => setAddingProject((v) => !v)}>
+          <span>Workspaces</span>
+          <button className="btn btn-small" onClick={() => setAddingWorkspace((v) => !v)}>
             + Add
           </button>
         </div>
-        {projectOrder.length === 0 && !addingProject ? (
-          <p className="sidebar-empty">No projects yet. Add a folder to sandbox it.</p>
+        {workspaceOrder.length === 0 && !addingWorkspace ? (
+          <p className="sidebar-empty">
+            No workspaces yet. Add one — it will be created inside the workspace root.
+          </p>
         ) : (
           <ul className="project-list">
-            {projectOrder.map((id) => {
-              const project = projects[id];
-              return project ? <ProjectNode key={id} project={project} /> : null;
+            {workspaceOrder.map((id) => {
+              const workspace = workspaces[id];
+              return workspace ? <WorkspaceNode key={id} workspace={workspace} /> : null;
             })}
-            {addingProject && <AddProjectForm onDone={() => setAddingProject(false)} />}
+            {addingWorkspace && <AddWorkspaceForm onDone={() => setAddingWorkspace(false)} />}
           </ul>
         )}
       </div>
@@ -389,7 +383,11 @@ export function Sidebar() {
                       {STATUS_DOT[session.status] ?? "○"}
                     </span>
                     <span className="session-title">{session.title}</span>
-                    {session.workspaceId && <span className="session-badge">sandbox</span>}
+                    {session.workspaceId ? (
+                      <span className="session-badge">sandbox</span>
+                    ) : (
+                      <span className="session-badge mock">mock</span>
+                    )}
                   </button>
                 </li>
               );

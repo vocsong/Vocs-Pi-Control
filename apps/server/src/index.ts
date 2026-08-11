@@ -22,8 +22,14 @@ import { selectRuntime } from "./sandbox/runtimeFactory.js";
 import { GitWorktreeService } from "./git/worktrees.js";
 import { AgentManager } from "./agents/agentManager.js";
 import { recordTraceEvent } from "./observability/trace.js";
+import { SettingsService } from "./settings/service.js";
+import { registerSettingsRoutes } from "./routes/settings.js";
 import { buildApp } from "./app.js";
 import { fileURLToPath } from "node:url";
+import path from "node:path";
+
+/** Repository root (repo/workspaces is the default workspace root). */
+const REPO_ROOT = fileURLToPath(new URL("../../..", import.meta.url));
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -46,6 +52,8 @@ async function main(): Promise<void> {
   const sessions = new SessionManager(db, hub, () => new MockPiDriver({ speedMs: 60 }), logger);
   // Keep workspace session statuses + event checkpoints in the control plane
   // in sync with agent events.
+  const settings = new SettingsService(db, logger, path.join(REPO_ROOT, "workspaces"));
+  settings.applyStoredKeysToEnv();
   const agents = new AgentManager(hub, logger, (sessionId, envelope) => {
     if (envelope.type === "session.state") {
       const status = (envelope.payload as { status?: string }).status;
@@ -66,7 +74,9 @@ async function main(): Promise<void> {
       })
       .run();
   });
-  const workspaceSessions = new WorkspaceSessionManager(db, agents, hub, logger);
+  // Merge stored provider keys into what agents receive at hello.
+  agents.credentialSource = () => settings.providerEnv();
+  const workspaceSessions = new WorkspaceSessionManager(db, agents, hub, logger, () => settings.defaults());
 
   const { runtime, detection, reason } = await selectRuntime(logger, process.env);
   logger.info({ runtime: runtime.name, reason, messages: detection.messages }, "sandbox runtime selected");
@@ -78,7 +88,8 @@ async function main(): Promise<void> {
     logger,
     agents,
     baseImage: process.env.PI_CONTROL_BASE_IMAGE ?? "pi-control/base:local",
-    imagesDir: fileURLToPath(new URL("../../..", import.meta.url)),
+    imagesDir: REPO_ROOT,
+    rootFolder: () => settings.rootFolder(),
   });
   sandbox.restoreSandboxes();
   sandbox.restoreAgents();
@@ -86,6 +97,7 @@ async function main(): Promise<void> {
   const worktrees = new GitWorktreeService(sandbox, logger);
 
   const app = await buildApp({ logger, db, hub, sessions, workspaceSessions, sandbox, agents, worktrees, leases, runtimeName: runtime.name });
+  registerSettingsRoutes(app, settings, () => agents.reconnectAll());
 
   try {
     await app.listen({ host: config.host, port: config.port });

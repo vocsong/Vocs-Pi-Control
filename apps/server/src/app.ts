@@ -11,8 +11,8 @@ import type { LeaseManager } from "./realtime/leases.js";
 import { registerRealtime } from "./realtime/ws.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerSessionRoutes } from "./routes/sessions.js";
-import { registerProjectRoutes } from "./routes/projects.js";
 import { registerWorkspaceRoutes } from "./routes/workspaces.js";
+import { registerSandboxContainerRoutes } from "./routes/sandboxes.js";
 import { registerSandboxRoutes } from "./routes/sandbox.js";
 import { registerFileRoutes } from "./routes/files.js";
 import { registerGitRoutes } from "./routes/git.js";
@@ -49,8 +49,8 @@ export async function buildApp(deps: AppDeps): Promise<AppFastify> {
 
   registerHealthRoutes(app, deps);
   registerSessionRoutes(app, deps.sessions, deps.workspaceSessions);
-  registerProjectRoutes(app, deps.sandbox);
-  registerWorkspaceRoutes(app, deps.sandbox, deps.agents);
+  registerWorkspaceRoutes(app, deps.sandbox);
+  registerSandboxContainerRoutes(app, deps.sandbox, deps.agents);
   registerSandboxRoutes(app, deps.sandbox);
   registerFileRoutes(app, deps.agents);
   registerGitRoutes(app, deps.agents, deps.worktrees);

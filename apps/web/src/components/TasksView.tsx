@@ -6,19 +6,19 @@ import { api } from "../api";
 const STATUSES: TaskStatus[] = ["todo", "running", "blocked", "done", "failed"];
 
 export function TasksView() {
-  const activeWorkspaceId = usePiControl((s) => s.activeWorkspaceId);
-  const workspaces = usePiControl((s) => s.workspaces);
+  const activeSandboxId = usePiControl((s) => s.activeSandboxId);
+  const sandboxes = usePiControl((s) => s.sandboxes);
   const sessions = usePiControl((s) => s.sessions);
-  const workspace = activeWorkspaceId ? workspaces[activeWorkspaceId] : undefined;
+  const sandbox = activeSandboxId ? sandboxes[activeSandboxId] : undefined;
 
   const [tasks, setTasks] = useState<TaskInfo[]>([]);
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const load = async () => {
-    if (!activeWorkspaceId) return;
+    if (!activeSandboxId) return;
     try {
-      const { tasks: rows } = await api.listTasks(activeWorkspaceId);
+      const { tasks: rows } = await api.listTasks(activeSandboxId);
       setTasks(rows);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -27,13 +27,13 @@ export function TasksView() {
 
   useEffect(() => {
     setTasks([]);
-    if (activeWorkspaceId) void load();
-  }, [activeWorkspaceId]);
+    if (activeSandboxId) void load();
+  }, [activeSandboxId]);
 
   const create = async () => {
-    if (!activeWorkspaceId || !title.trim()) return;
+    if (!activeSandboxId || !title.trim()) return;
     try {
-      await api.createTask(activeWorkspaceId, { title: title.trim() });
+      await api.createTask(activeSandboxId, { title: title.trim() });
       setTitle("");
       await load();
     } catch (e) {
@@ -42,7 +42,7 @@ export function TasksView() {
   };
 
   const setStatus = async (taskId: string, status: TaskStatus) => {
-    if (!activeWorkspaceId) return;
+    if (!activeSandboxId) return;
     try {
       await api.updateTask(taskId, { status });
       await load();
@@ -60,11 +60,11 @@ export function TasksView() {
     }
   };
 
-  if (!workspace) {
-    return <div className="files-empty">Select a workspace to manage tasks.</div>;
+  if (!sandbox) {
+    return <div className="files-empty">Start a sandbox to manage tasks.</div>;
   }
 
-  const workspaceSessions = Object.values(sessions).filter((s) => s.workspaceId === workspace.id);
+  const sandboxSessions = Object.values(sessions).filter((s) => s.workspaceId === sandbox.id);
 
   return (
     <div className="tasks-view">
@@ -103,7 +103,7 @@ export function TasksView() {
                 title="Assign to a session"
               >
                 <option value="">unassigned</option>
-                {workspaceSessions.map((s) => (
+                {sandboxSessions.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.title}
                   </option>

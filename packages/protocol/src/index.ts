@@ -225,7 +225,7 @@ export interface ClosedEventPayload {
 /* Project / workspace / sandbox payloads                              */
 /* ------------------------------------------------------------------ */
 
-export type WorkspaceStatus =
+export type SandboxStatus =
   | "missing"
   | "building"
   | "stopped"
@@ -234,7 +234,7 @@ export type WorkspaceStatus =
   | "stopping"
   | "error";
 
-export interface ProjectInfo {
+export interface WorkspaceInfo {
   id: string;
   machineId: string;
   name: string;
@@ -244,9 +244,9 @@ export interface ProjectInfo {
   lastOpenedAt?: string;
 }
 
-export interface WorkspaceInfo {
+export interface SandboxInfo {
   id: string;
-  projectId: string;
+  workspaceId: string;
   machineId: string;
   name: string;
   hostPath: string;
@@ -254,8 +254,7 @@ export interface WorkspaceInfo {
   kind: "main" | "worktree" | "directory";
   gitBranch?: string;
   securityProfile: "standard" | "restricted" | "trusted";
-  sandboxId?: string;
-  status: WorkspaceStatus;
+  status: SandboxStatus;
   createdAt: string;
   archivedAt?: string;
 }
@@ -391,10 +390,10 @@ export const EVENT_TYPES = {
   modelUpdated: "model.updated",
   usageUpdated: "usage.updated",
 
-  projectCreated: "project.created",
   workspaceCreated: "workspace.created",
-  workspaceState: "workspace.state",
-  workspaceError: "workspace.error",
+  sandboxCreated: "sandbox.created",
+  sandboxState: "sandbox.state",
+  sandboxError: "sandbox.error",
   sandboxStatus: "sandbox.status",
   sandboxPrepare: "sandbox.prepare",
   sandboxSelfTest: "sandbox.selftest",

@@ -25,73 +25,73 @@ const renameBody = z
   .strict();
 
 export function registerFileRoutes(app: AppFastify, agents: AgentManager): void {
-  app.get("/api/workspaces/:workspaceId/files", async (request, reply) => {
-    const { workspaceId } = request.params as { workspaceId: string };
+  app.get("/api/sandboxes/:sandboxId/files", async (request, reply) => {
+    const { sandboxId } = request.params as { sandboxId: string };
     const query = listQuery.parse(request.query);
     try {
-      return { entries: await agents.listFiles(workspaceId, query.path) };
+      return { entries: await agents.listFiles(sandboxId, query.path) };
     } catch (error) {
       return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
     }
   });
 
-  app.get("/api/workspaces/:workspaceId/file", async (request, reply) => {
-    const { workspaceId } = request.params as { workspaceId: string };
+  app.get("/api/sandboxes/:sandboxId/file", async (request, reply) => {
+    const { sandboxId } = request.params as { sandboxId: string };
     const query = filePathSchema.parse(request.query);
     try {
-      return { file: await agents.readFile(workspaceId, query.path) };
+      return { file: await agents.readFile(sandboxId, query.path) };
     } catch (error) {
       return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
     }
   });
 
-  app.get("/api/workspaces/:workspaceId/file/search", async (request, reply) => {
-    const { workspaceId } = request.params as { workspaceId: string };
+  app.get("/api/sandboxes/:sandboxId/file/search", async (request, reply) => {
+    const { sandboxId } = request.params as { sandboxId: string };
     const query = z.object({ q: z.string().min(1).max(200), max: z.coerce.number().int().min(1).max(200).optional() }).parse(request.query);
     try {
-      return { matches: await agents.searchFiles(workspaceId, query.q, query.max) };
+      return { matches: await agents.searchFiles(sandboxId, query.q, query.max) };
     } catch (error) {
       return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
     }
   });
 
-  app.put("/api/workspaces/:workspaceId/file", async (request, reply) => {
-    const { workspaceId } = request.params as { workspaceId: string };
+  app.put("/api/sandboxes/:sandboxId/file", async (request, reply) => {
+    const { sandboxId } = request.params as { sandboxId: string };
     const body = writeBody.parse(request.body);
     try {
-      return { result: await agents.writeFile(workspaceId, body.path, body.content, body.encoding) };
+      return { result: await agents.writeFile(sandboxId, body.path, body.content, body.encoding) };
     } catch (error) {
       return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
     }
   });
 
-  app.post("/api/workspaces/:workspaceId/file/mkdir", async (request, reply) => {
-    const { workspaceId } = request.params as { workspaceId: string };
+  app.post("/api/sandboxes/:sandboxId/file/mkdir", async (request, reply) => {
+    const { sandboxId } = request.params as { sandboxId: string };
     const body = mkdirBody.parse(request.body);
     try {
-      await agents.mkdirFile(workspaceId, body.path);
+      await agents.mkdirFile(sandboxId, body.path);
       return { ok: true };
     } catch (error) {
       return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
     }
   });
 
-  app.post("/api/workspaces/:workspaceId/file/remove", async (request, reply) => {
-    const { workspaceId } = request.params as { workspaceId: string };
+  app.post("/api/sandboxes/:sandboxId/file/remove", async (request, reply) => {
+    const { sandboxId } = request.params as { sandboxId: string };
     const body = removeBody.parse(request.body);
     try {
-      await agents.removeFile(workspaceId, body.path, body.recursive);
+      await agents.removeFile(sandboxId, body.path, body.recursive);
       return { ok: true };
     } catch (error) {
       return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
     }
   });
 
-  app.post("/api/workspaces/:workspaceId/file/rename", async (request, reply) => {
-    const { workspaceId } = request.params as { workspaceId: string };
+  app.post("/api/sandboxes/:sandboxId/file/rename", async (request, reply) => {
+    const { sandboxId } = request.params as { sandboxId: string };
     const body = renameBody.parse(request.body);
     try {
-      await agents.renameFile(workspaceId, body.from, body.to);
+      await agents.renameFile(sandboxId, body.from, body.to);
       return { ok: true };
     } catch (error) {
       return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });

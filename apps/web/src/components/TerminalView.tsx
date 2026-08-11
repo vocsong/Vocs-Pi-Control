@@ -17,9 +17,9 @@ interface TerminalSession extends TerminalInfo {
 }
 
 export function TerminalView() {
-  const activeWorkspaceId = usePiControl((s) => s.activeWorkspaceId);
-  const workspaces = usePiControl((s) => s.workspaces);
-  const workspace = activeWorkspaceId ? workspaces[activeWorkspaceId] : undefined;
+  const activeSandboxId = usePiControl((s) => s.activeSandboxId);
+  const sandboxes = usePiControl((s) => s.sandboxes);
+  const sandbox = activeSandboxId ? sandboxes[activeSandboxId] : undefined;
   const [sessions, setSessions] = useState<Record<string, TerminalSession>>({});
   const [active, setActive] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +28,7 @@ export function TerminalView() {
 
   // Live output events → terminals.
   useEffect(() => {
-    if (!activeWorkspaceId) return;
+    if (!activeSandboxId) return;
     const unsubscribe = realtime.onEvent((envelope) => {
       if (envelope.type === "terminal.output") {
         const payload = envelope.payload as { terminalId: string; data: string };
@@ -49,16 +49,16 @@ export function TerminalView() {
       }
     });
     return unsubscribe;
-  }, [activeWorkspaceId, realtime]);
+  }, [activeSandboxId, realtime]);
 
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
 
   // Restore existing terminals on mount/workspace switch.
   useEffect(() => {
-    if (!activeWorkspaceId) return;
+    if (!activeSandboxId) return;
     void api
-      .listTerminals(activeWorkspaceId)
+      .listTerminals(activeSandboxId)
       .then(({ terminals }) => {
         for (const info of terminals as TerminalInfo[]) {
           if (!sessionsRef.current[info.id]) {
@@ -67,7 +67,7 @@ export function TerminalView() {
             term.loadAddon(fit);
             term.write(info.buffer);
             term.onData((data) => {
-              void realtime.sendCommand("terminal.input", { workspaceId: activeWorkspaceId, terminalId: info.id, data }).catch(() => undefined);
+              void realtime.sendCommand("terminal.input", { workspaceId: activeSandboxId, terminalId: info.id, data }).catch(() => undefined);
             });
             setSessions((prev) => ({ ...prev, [info.id]: { ...info, term, fit } }));
             if (!active) setActive(info.id);
@@ -82,7 +82,7 @@ export function TerminalView() {
       setActive(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeWorkspaceId]);
+  }, [activeSandboxId]);
 
   // Attach the active terminal to the DOM + fit.
   useEffect(() => {
@@ -103,17 +103,17 @@ export function TerminalView() {
   }, [active, sessions]);
 
   const openTerminal = async () => {
-    if (!activeWorkspaceId) return;
+    if (!activeSandboxId) return;
     setError(null);
     try {
-      const ack = await realtime.sendCommand("terminal.open", { workspaceId: activeWorkspaceId, cols: 80, rows: 24 });
+      const ack = await realtime.sendCommand("terminal.open", { workspaceId: activeSandboxId, cols: 80, rows: 24 });
       const payload = (ack.payload as { terminalId: string; terminal: TerminalInfo }).terminal;
       const terminalId = (ack.payload as { terminalId: string }).terminalId;
       const term = new Terminal({ cursorBlink: true, fontSize: 13 });
       const fit = new FitAddon();
       term.loadAddon(fit);
       term.onData((data) => {
-        void realtime.sendCommand("terminal.input", { workspaceId: activeWorkspaceId, terminalId, data }).catch(() => undefined);
+        void realtime.sendCommand("terminal.input", { workspaceId: activeSandboxId, terminalId, data }).catch(() => undefined);
       });
       const session: TerminalSession = { ...payload, id: terminalId, term, fit };
       setSessions((prev) => ({ ...prev, [terminalId]: session }));
@@ -124,9 +124,9 @@ export function TerminalView() {
   };
 
   const closeTerminal = async (terminalId: string) => {
-    if (!activeWorkspaceId) return;
+    if (!activeSandboxId) return;
     try {
-      await realtime.sendCommand("terminal.close", { workspaceId: activeWorkspaceId, terminalId });
+      await realtime.sendCommand("terminal.close", { workspaceId: activeSandboxId, terminalId });
     } catch {
       /* the closed event will clean up */
     }
@@ -139,8 +139,8 @@ export function TerminalView() {
     });
   };
 
-  if (!workspace) {
-    return <div className="files-empty">Select a workspace to open a terminal.</div>;
+  if (!sandbox) {
+    return <div className="files-empty">Start a sandbox to open a terminal.</div>;
   }
 
   return (
@@ -169,9 +169,9 @@ export function TerminalView() {
 /* ------------------------------------------------------------------ */
 
 export function ProcessesView() {
-  const activeWorkspaceId = usePiControl((s) => s.activeWorkspaceId);
-  const workspaces = usePiControl((s) => s.workspaces);
-  const workspace = activeWorkspaceId ? workspaces[activeWorkspaceId] : undefined;
+  const activeSandboxId = usePiControl((s) => s.activeSandboxId);
+  const sandboxes = usePiControl((s) => s.sandboxes);
+  const sandbox = activeSandboxId ? sandboxes[activeSandboxId] : undefined;
   const [processes, setProcesses] = useState<AgentProcessInfo[]>([]);
   const [output, setOutput] = useState<Record<string, string[]>>({});
   const [name, setName] = useState("");
@@ -183,11 +183,11 @@ export function ProcessesView() {
   const realtime = getRealtime();
 
   const refresh = async () => {
-    if (!activeWorkspaceId) return;
+    if (!activeSandboxId) return;
     try {
-      const { processes } = await api.listProcesses(activeWorkspaceId);
+      const { processes } = await api.listProcesses(activeSandboxId);
       setProcesses(processes);
-      setPorts(await api.listPorts(activeWorkspaceId));
+      setPorts(await api.listPorts(activeSandboxId));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -198,11 +198,11 @@ export function ProcessesView() {
     const interval = setInterval(() => void refresh(), 5000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeWorkspaceId]);
+  }, [activeSandboxId]);
 
   // Live process output.
   useEffect(() => {
-    if (!activeWorkspaceId) return;
+    if (!activeSandboxId) return;
     return realtime.onEvent((envelope) => {
       if (envelope.type === "process.output") {
         const payload = envelope.payload as { processId: string; text: string };
@@ -220,15 +220,15 @@ export function ProcessesView() {
         void refresh();
       }
     });
-  }, [activeWorkspaceId, realtime]);
+  }, [activeSandboxId, realtime]);
 
   const spawn = async () => {
-    if (!activeWorkspaceId || !command.trim()) return;
+    if (!activeSandboxId || !command.trim()) return;
     setBusy(true);
     setError(null);
     try {
       const env = port.trim() ? { PORT: port.trim(), HOST: "0.0.0.0" } : undefined;
-      await api.spawnProcess(activeWorkspaceId, { name: name.trim() || command.trim().split(/\s+/)[0], command: command.trim().split(/\s+/), env });
+      await api.spawnProcess(activeSandboxId, { name: name.trim() || command.trim().split(/\s+/)[0], command: command.trim().split(/\s+/), env });
       setName("");
       setCommand("");
       setPort("");
@@ -241,17 +241,17 @@ export function ProcessesView() {
   };
 
   const kill = async (processId: string) => {
-    if (!activeWorkspaceId) return;
+    if (!activeSandboxId) return;
     try {
-      await api.killProcess(activeWorkspaceId, processId);
+      await api.killProcess(activeSandboxId, processId);
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
   };
 
-  if (!workspace) {
-    return <div className="files-empty">Select a workspace to manage processes.</div>;
+  if (!sandbox) {
+    return <div className="files-empty">Start a sandbox to manage processes.</div>;
   }
 
   return (

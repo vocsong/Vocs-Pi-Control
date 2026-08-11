@@ -19,8 +19,8 @@ import type { SandboxManager } from "../sandbox/manager.js";
 import type { Logger } from "../logger.js";
 
 export interface CreateWorktreeInput {
-  projectId: string;
-  /** Workspace name (also used as the worktree directory name). */
+  workspaceId: string;
+  /** Sandbox/workspace name (also used as the worktree directory name). */
   name: string;
   /** New branch name (defaults to the workspace name). */
   branch?: string;
@@ -41,14 +41,14 @@ export class GitWorktreeService {
   ) {}
 
   async create(input: CreateWorktreeInput): Promise<CreatedWorktree> {
-    const project = this.sandbox.projectById(input.projectId);
-    if (!project) throw new Error(`Unknown project ${input.projectId}`);
+    const workspace = this.sandbox.workspaceById(input.workspaceId);
+    if (!workspace) throw new Error(`Unknown workspace ${input.workspaceId}`);
 
-    const repoRoot = await this.repoRootOf(project.hostRootPath);
+    const repoRoot = await this.repoRootOf(workspace.hostRootPath);
     const branch = input.branch ?? sanitizeName(input.name);
     await this.validateRef(branch);
 
-    const worktreeRoot = path.join(path.dirname(repoRoot), WORKTREE_ROOT_DIR, project.id);
+    const worktreeRoot = path.join(path.dirname(repoRoot), WORKTREE_ROOT_DIR, workspace.id);
     const target = path.join(worktreeRoot, sanitizeName(input.name));
     fs.mkdirSync(worktreeRoot, { recursive: true });
     if (fs.existsSync(target)) {
@@ -63,7 +63,7 @@ export class GitWorktreeService {
     }
 
     // Create the workspace (container) for this worktree.
-    const workspace = await this.sandbox.createWorkspace(input.projectId, {
+    const sandbox = await this.sandbox.createSandbox(input.workspaceId, {
       name: input.name,
       hostPath: target,
       securityProfile: "standard",
@@ -71,18 +71,18 @@ export class GitWorktreeService {
       gitBranch: branch,
     });
     this.logger.info(
-      { workspaceId: workspace.id, worktreePath: target, branch },
-      "worktree workspace created",
+      { sandboxId: sandbox.id, worktreePath: target, branch },
+      "worktree sandbox created",
     );
-    return { workspaceId: workspace.id, worktreePath: target, branch };
+    return { workspaceId: sandbox.id, worktreePath: target, branch };
   }
 
   /** List worktree workspaces for a project (from the control plane). */
-  list(projectId: string): Array<{ workspaceId: string; name: string; path: string; branch: string | undefined }> {
+  list(workspaceId: string): Array<{ sandboxId: string; name: string; path: string; branch: string | undefined }> {
     return this.sandbox
-      .listWorkspaces(projectId)
-      .filter((w) => w.kind === "worktree")
-      .map((w) => ({ workspaceId: w.id, name: w.name, path: w.hostPath, branch: w.gitBranch }));
+      .listSandboxes(workspaceId)
+      .filter((s) => s.kind === "worktree")
+      .map((s) => ({ sandboxId: s.id, name: s.name, path: s.hostPath, branch: s.gitBranch }));
   }
 
   private async repoRootOf(hostPath: string): Promise<string> {

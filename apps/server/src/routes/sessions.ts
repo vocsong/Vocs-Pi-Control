@@ -28,17 +28,17 @@ export function registerSessionRoutes(
     return reply.code(201).send({ session });
   });
 
-  app.post("/api/workspaces/:workspaceId/sessions", async (request, reply) => {
-    const { workspaceId } = request.params as { workspaceId: string };
+  app.post("/api/sandboxes/:sandboxId/sessions", async (request, reply) => {
+    const { sandboxId } = request.params as { sandboxId: string };
     const body = createBody.parse(request.body);
-    const session = await workspaceSessions.create(workspaceId, body);
+    const session = await workspaceSessions.create(sandboxId, body);
     return reply.code(201).send({ session });
   });
 
-  app.post("/api/workspaces/:workspaceId/sessions/resume", async (request, reply) => {
-    const { workspaceId } = request.params as { workspaceId: string };
+  app.post("/api/sandboxes/:sandboxId/sessions/resume", async (request, reply) => {
+    const { sandboxId } = request.params as { sandboxId: string };
     const body = z.object({ nativeSessionPath: z.string().min(1).max(4096) }).strict().parse(request.body);
-    const session = await workspaceSessions.resume(workspaceId, body.nativeSessionPath);
+    const session = await workspaceSessions.resume(sandboxId, body.nativeSessionPath);
     return reply.code(201).send({ session });
   });
 
@@ -96,10 +96,10 @@ export function registerSessionRoutes(
     }
   });
 
-  app.get("/api/workspaces/:workspaceId/models", async (request, reply) => {
-    const { workspaceId } = request.params as { workspaceId: string };
+  app.get("/api/sandboxes/:sandboxId/models", async (request, reply) => {
+    const { sandboxId } = request.params as { sandboxId: string };
     try {
-      return { models: await workspaceSessions.models(workspaceId) };
+      return { models: await workspaceSessions.models(sandboxId) };
     } catch (error) {
       return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
     }

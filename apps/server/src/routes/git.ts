@@ -19,102 +19,102 @@ const worktreeBody = z
   .strict();
 
 export function registerGitRoutes(app: AppFastify, agents: AgentManager, worktrees: GitWorktreeService): void {
-  app.get("/api/workspaces/:workspaceId/git/status", async (request, reply) => {
-    const { workspaceId } = request.params as { workspaceId: string };
+  app.get("/api/sandboxes/:sandboxId/git/status", async (request, reply) => {
+    const { sandboxId } = request.params as { sandboxId: string };
     try {
-      const event = await agents.gitStatus(workspaceId);
+      const event = await agents.gitStatus(sandboxId);
       return event;
     } catch (error) {
       return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
     }
   });
 
-  app.get("/api/workspaces/:workspaceId/git/diff", async (request, reply) => {
-    const { workspaceId } = request.params as { workspaceId: string };
+  app.get("/api/sandboxes/:sandboxId/git/diff", async (request, reply) => {
+    const { sandboxId } = request.params as { sandboxId: string };
     const query = z.object({ staged: z.enum(["1", "true"]).optional() }).parse(request.query);
     try {
-      const event = await agents.gitDiff(workspaceId, query.staged === "1" || query.staged === "true");
+      const event = await agents.gitDiff(sandboxId, query.staged === "1" || query.staged === "true");
       return event;
     } catch (error) {
       return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
     }
   });
 
-  app.post("/api/workspaces/:workspaceId/git/stage", async (request, reply) => {
-    const { workspaceId } = request.params as { workspaceId: string };
+  app.post("/api/sandboxes/:sandboxId/git/stage", async (request, reply) => {
+    const { sandboxId } = request.params as { sandboxId: string };
     const body = pathsBody.parse(request.body);
     try {
-      await agents.gitStage(workspaceId, body.paths);
+      await agents.gitStage(sandboxId, body.paths);
       return { ok: true };
     } catch (error) {
       return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
     }
   });
 
-  app.post("/api/workspaces/:workspaceId/git/unstage", async (request, reply) => {
-    const { workspaceId } = request.params as { workspaceId: string };
+  app.post("/api/sandboxes/:sandboxId/git/unstage", async (request, reply) => {
+    const { sandboxId } = request.params as { sandboxId: string };
     const body = pathsBody.parse(request.body);
     try {
-      await agents.gitUnstage(workspaceId, body.paths);
+      await agents.gitUnstage(sandboxId, body.paths);
       return { ok: true };
     } catch (error) {
       return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
     }
   });
 
-  app.post("/api/workspaces/:workspaceId/git/commit", async (request, reply) => {
-    const { workspaceId } = request.params as { workspaceId: string };
+  app.post("/api/sandboxes/:sandboxId/git/commit", async (request, reply) => {
+    const { sandboxId } = request.params as { sandboxId: string };
     const body = commitBody.parse(request.body);
     try {
-      const event = await agents.gitCommit(workspaceId, body.message);
+      const event = await agents.gitCommit(sandboxId, body.message);
       return event;
     } catch (error) {
       return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
     }
   });
 
-  app.get("/api/workspaces/:workspaceId/git/branches", async (request, reply) => {
-    const { workspaceId } = request.params as { workspaceId: string };
+  app.get("/api/sandboxes/:sandboxId/git/branches", async (request, reply) => {
+    const { sandboxId } = request.params as { sandboxId: string };
     try {
-      return await agents.gitBranches(workspaceId);
+      return await agents.gitBranches(sandboxId);
     } catch (error) {
       return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
     }
   });
 
-  app.post("/api/workspaces/:workspaceId/git/branches", async (request, reply) => {
-    const { workspaceId } = request.params as { workspaceId: string };
+  app.post("/api/sandboxes/:sandboxId/git/branches", async (request, reply) => {
+    const { sandboxId } = request.params as { sandboxId: string };
     const body = branchBody.parse(request.body);
     try {
-      await agents.gitBranchCreate(workspaceId, body.name, body.from);
+      await agents.gitBranchCreate(sandboxId, body.name, body.from);
       return { ok: true };
     } catch (error) {
       return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
     }
   });
 
-  app.get("/api/workspaces/:workspaceId/git/log", async (request, reply) => {
-    const { workspaceId } = request.params as { workspaceId: string };
+  app.get("/api/sandboxes/:sandboxId/git/log", async (request, reply) => {
+    const { sandboxId } = request.params as { sandboxId: string };
     try {
-      return await agents.gitLog(workspaceId);
+      return await agents.gitLog(sandboxId);
     } catch (error) {
       return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
     }
   });
 
-  app.post("/api/projects/:projectId/worktrees", async (request, reply) => {
-    const { projectId } = request.params as { projectId: string };
+  app.post("/api/workspaces/:workspaceId/worktrees", async (request, reply) => {
+    const { workspaceId } = request.params as { workspaceId: string };
     const body = worktreeBody.parse(request.body);
     try {
-      const created = await worktrees.create({ projectId, name: body.name, branch: body.branch });
+      const created = await worktrees.create({ workspaceId, name: body.name, branch: body.branch });
       return reply.code(201).send({ worktree: created });
     } catch (error) {
       return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
     }
   });
 
-  app.get("/api/projects/:projectId/worktrees", async (request) => {
-    const { projectId } = request.params as { projectId: string };
-    return { worktrees: worktrees.list(projectId) };
+  app.get("/api/workspaces/:workspaceId/worktrees", async (request) => {
+    const { workspaceId } = request.params as { workspaceId: string };
+    return { worktrees: worktrees.list(workspaceId) };
   });
 }

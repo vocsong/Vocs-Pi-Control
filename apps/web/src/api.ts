@@ -1,4 +1,4 @@
-import type { AgentProcessInfo, ProjectInfo, SessionInfo, WorkspaceInfo } from "@pi-control/protocol";
+import type { AgentProcessInfo, SandboxInfo, SessionInfo, WorkspaceInfo } from "@pi-control/protocol";
 
 export interface HealthInfo {
   status: string;
@@ -42,88 +42,88 @@ export const api = {
 
   deleteSession: (sessionId: string) => json<{ ok: boolean }>(`/api/sessions/${sessionId}`, { method: "DELETE" }),
 
-  listFiles: (workspaceId: string, path = "") =>
+  listFiles: (sandboxId: string, path = "") =>
     json<{ entries: Array<{ name: string; path: string; type: string; size: number; mtimeMs: number }> }>(
-      `/api/workspaces/${workspaceId}/files?path=${encodeURIComponent(path)}`,
+      `/api/sandboxes/${sandboxId}/files?path=${encodeURIComponent(path)}`,
     ),
 
-  readFile: (workspaceId: string, path: string) =>
+  readFile: (sandboxId: string, path: string) =>
     json<{ file: { content: string; encoding: "utf8" | "base64"; truncated: boolean; size: number } }>(
-      `/api/workspaces/${workspaceId}/file?path=${encodeURIComponent(path)}`,
+      `/api/sandboxes/${sandboxId}/file?path=${encodeURIComponent(path)}`,
     ),
 
-  writeFile: (workspaceId: string, path: string, content: string, encoding: "utf8" | "base64" = "utf8") =>
-    json<{ result: { ok: boolean } }>(`/api/workspaces/${workspaceId}/file`, {
+  writeFile: (sandboxId: string, path: string, content: string, encoding: "utf8" | "base64" = "utf8") =>
+    json<{ result: { ok: boolean } }>(`/api/sandboxes/${sandboxId}/file`, {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ path, content, encoding }),
     }),
 
-  mkdirFile: (workspaceId: string, path: string) =>
-    json<{ ok: boolean }>(`/api/workspaces/${workspaceId}/file/mkdir`, {
+  mkdirFile: (sandboxId: string, path: string) =>
+    json<{ ok: boolean }>(`/api/sandboxes/${sandboxId}/file/mkdir`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ path }),
     }),
 
-  removeFile: (workspaceId: string, path: string, recursive = false) =>
-    json<{ ok: boolean }>(`/api/workspaces/${workspaceId}/file/remove`, {
+  removeFile: (sandboxId: string, path: string, recursive = false) =>
+    json<{ ok: boolean }>(`/api/sandboxes/${sandboxId}/file/remove`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ path, recursive }),
     }),
 
-  renameFile: (workspaceId: string, from: string, to: string) =>
-    json<{ ok: boolean }>(`/api/workspaces/${workspaceId}/file/rename`, {
+  renameFile: (sandboxId: string, from: string, to: string) =>
+    json<{ ok: boolean }>(`/api/sandboxes/${sandboxId}/file/rename`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ from, to }),
     }),
 
-  searchFiles: (workspaceId: string, query: string, max = 30) =>
+  searchFiles: (sandboxId: string, query: string, max = 30) =>
     json<{ matches: string[] }>(
-      `/api/workspaces/${workspaceId}/file/search?q=${encodeURIComponent(query)}&max=${max}`,
+      `/api/sandboxes/${sandboxId}/file/search?q=${encodeURIComponent(query)}&max=${max}`,
     ),
-  gitStatus: (workspaceId: string) => json<unknown>(`/api/workspaces/${workspaceId}/git/status`),
+  gitStatus: (sandboxId: string) => json<unknown>(`/api/sandboxes/${sandboxId}/git/status`),
 
-  gitDiff: (workspaceId: string, staged = false) =>
-    json<unknown>(`/api/workspaces/${workspaceId}/git/diff?staged=${staged ? 1 : 0}`),
+  gitDiff: (sandboxId: string, staged = false) =>
+    json<unknown>(`/api/sandboxes/${sandboxId}/git/diff?staged=${staged ? 1 : 0}`),
 
-  gitStage: (workspaceId: string, paths: string[]) =>
-    json<{ ok: boolean }>(`/api/workspaces/${workspaceId}/git/stage`, {
+  gitStage: (sandboxId: string, paths: string[]) =>
+    json<{ ok: boolean }>(`/api/sandboxes/${sandboxId}/git/stage`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ paths }),
     }),
 
-  gitUnstage: (workspaceId: string, paths: string[]) =>
-    json<{ ok: boolean }>(`/api/workspaces/${workspaceId}/git/unstage`, {
+  gitUnstage: (sandboxId: string, paths: string[]) =>
+    json<{ ok: boolean }>(`/api/sandboxes/${sandboxId}/git/unstage`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ paths }),
     }),
 
-  gitCommit: (workspaceId: string, message: string) =>
-    json<unknown>(`/api/workspaces/${workspaceId}/git/commit`, {
+  gitCommit: (sandboxId: string, message: string) =>
+    json<unknown>(`/api/sandboxes/${sandboxId}/git/commit`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ message }),
     }),
 
-  gitBranches: (workspaceId: string) => json<unknown>(`/api/workspaces/${workspaceId}/git/branches`),
+  gitBranches: (sandboxId: string) => json<unknown>(`/api/sandboxes/${sandboxId}/git/branches`),
 
-  gitBranchCreate: (workspaceId: string, name: string) =>
-    json<{ ok: boolean }>(`/api/workspaces/${workspaceId}/git/branches`, {
+  gitBranchCreate: (sandboxId: string, name: string) =>
+    json<{ ok: boolean }>(`/api/sandboxes/${sandboxId}/git/branches`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ name }),
     }),
 
-  gitLog: (workspaceId: string) => json<unknown>(`/api/workspaces/${workspaceId}/git/log`),
+  gitLog: (sandboxId: string) => json<unknown>(`/api/sandboxes/${sandboxId}/git/log`),
 
-  createWorktree: (projectId: string, body: { name: string; branch?: string }) =>
+  createWorktree: (workspaceId: string, body: { name: string; branch?: string }) =>
     json<{ worktree: { workspaceId: string; worktreePath: string; branch: string } }>(
-      `/api/projects/${projectId}/worktrees`,
+      `/api/workspaces/${workspaceId}/worktrees`,
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -131,32 +131,32 @@ export const api = {
       },
     ),
 
-  listTerminals: (workspaceId: string) => json<{ terminals: unknown[] }>(`/api/workspaces/${workspaceId}/terminals`),
+  listTerminals: (sandboxId: string) => json<{ terminals: unknown[] }>(`/api/sandboxes/${sandboxId}/terminals`),
 
-  listProcesses: (workspaceId: string) =>
-    json<{ processes: AgentProcessInfo[] }>(`/api/workspaces/${workspaceId}/processes`),
+  listProcesses: (sandboxId: string) =>
+    json<{ processes: AgentProcessInfo[] }>(`/api/sandboxes/${sandboxId}/processes`),
 
   spawnProcess: (
-    workspaceId: string,
+    sandboxId: string,
     body: { name?: string; command: string[]; env?: Record<string, string> },
   ) =>
-    json<{ process: AgentProcessInfo }>(`/api/workspaces/${workspaceId}/processes`, {
+    json<{ process: AgentProcessInfo }>(`/api/sandboxes/${sandboxId}/processes`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     }),
 
-  killProcess: (workspaceId: string, processId: string) =>
-    json<{ ok: boolean }>(`/api/workspaces/${workspaceId}/processes/${processId}/kill`, { method: "POST" }),
+  killProcess: (sandboxId: string, processId: string) =>
+    json<{ ok: boolean }>(`/api/sandboxes/${sandboxId}/processes/${processId}/kill`, { method: "POST" }),
 
-  listPorts: (workspaceId: string) =>
-    json<Array<{ containerPort: number; url: string }>>(`/api/workspaces/${workspaceId}/ports`),
+  listPorts: (sandboxId: string) =>
+    json<Array<{ containerPort: number; url: string }>>(`/api/sandboxes/${sandboxId}/ports`),
 
   sessionCapabilities: (sessionId: string) =>
     json<{ capabilities: Record<string, unknown> }>(`/api/sessions/${sessionId}/capabilities`),
 
-  listModels: (workspaceId: string) =>
-    json<{ models: Array<{ provider: string; id: string }> }>(`/api/workspaces/${workspaceId}/models`),
+  listModels: (sandboxId: string) =>
+    json<{ models: Array<{ provider: string; id: string }> }>(`/api/sandboxes/${sandboxId}/models`),
 
   setSessionModel: (sessionId: string, model: string) =>
     json<{ ok: boolean }>(`/api/sessions/${sessionId}/model`, {
@@ -175,11 +175,11 @@ export const api = {
   compactSession: (sessionId: string) =>
     json<{ ok: boolean }>(`/api/sessions/${sessionId}/compact`, { method: "POST" }),
 
-  listTasks: (workspaceId: string) =>
-    json<{ tasks: import("@pi-control/protocol").TaskInfo[] }>(`/api/workspaces/${workspaceId}/tasks`),
+  listTasks: (sandboxId: string) =>
+    json<{ tasks: import("@pi-control/protocol").TaskInfo[] }>(`/api/sandboxes/${sandboxId}/tasks`),
 
-  createTask: (workspaceId: string, body: { title: string; description?: string }) =>
-    json<{ task: import("@pi-control/protocol").TaskInfo }>(`/api/workspaces/${workspaceId}/tasks`, {
+  createTask: (sandboxId: string, body: { title: string; description?: string }) =>
+    json<{ task: import("@pi-control/protocol").TaskInfo }>(`/api/sandboxes/${sandboxId}/tasks`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -192,46 +192,46 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
-  listProjects: () => json<{ projects: ProjectInfo[] }>("/api/projects"),
+  listWorkspaces: () => json<{ workspaces: WorkspaceInfo[] }>("/api/workspaces"),
 
-  createProject: (body: { name: string; hostRootPath: string }) =>
-    json<{ project: ProjectInfo }>("/api/projects", {
+  createWorkspace: (body: { name: string; hostRootPath?: string }) =>
+    json<{ workspace: WorkspaceInfo }>("/api/workspaces", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     }),
 
-  listWorkspaces: (projectId?: string) =>
-    json<{ workspaces: WorkspaceInfo[] }>(projectId ? `/api/projects/${projectId}/workspaces` : "/api/workspaces"),
+  listSandboxes: (workspaceId?: string) =>
+    json<{ sandboxes: SandboxInfo[] }>(workspaceId ? `/api/workspaces/${workspaceId}/sandboxes` : "/api/sandboxes"),
 
-  createWorkspace: (
-    projectId: string,
-    body: { name: string; hostPath: string; securityProfile?: string; profile?: string; imageRef?: string },
+  createSandbox: (
+    workspaceId: string,
+    body: { name: string; hostPath?: string; securityProfile?: string; profile?: string; imageRef?: string },
   ) =>
-    json<{ workspace: WorkspaceInfo }>(`/api/projects/${projectId}/workspaces`, {
+    json<{ sandbox: SandboxInfo }>(`/api/workspaces/${workspaceId}/sandboxes`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     }),
 
-  startWorkspace: (workspaceId: string) =>
-    json<{ workspace: WorkspaceInfo }>(`/api/workspaces/${workspaceId}/start`, { method: "POST" }),
+  startSandbox: (sandboxId: string) =>
+    json<{ sandbox: SandboxInfo }>(`/api/sandboxes/${sandboxId}/start`, { method: "POST" }),
 
-  stopWorkspace: (workspaceId: string) =>
-    json<{ workspace: WorkspaceInfo }>(`/api/workspaces/${workspaceId}/stop`, { method: "POST" }),
+  stopSandbox: (sandboxId: string) =>
+    json<{ sandbox: SandboxInfo }>(`/api/sandboxes/${sandboxId}/stop`, { method: "POST" }),
 
-  rebuildWorkspace: (workspaceId: string, profile?: string) =>
-    json<{ workspace: WorkspaceInfo }>(`/api/workspaces/${workspaceId}/rebuild`, {
+  rebuildSandbox: (sandboxId: string, profile?: string) =>
+    json<{ sandbox: SandboxInfo }>(`/api/sandboxes/${sandboxId}/rebuild`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(profile ? { profile } : {}),
     }),
 
-  removeWorkspace: (workspaceId: string) =>
-    json<{ ok: boolean }>(`/api/workspaces/${workspaceId}/remove`, { method: "POST" }),
+  removeSandbox: (sandboxId: string) =>
+    json<{ ok: boolean }>(`/api/sandboxes/${sandboxId}/remove`, { method: "POST" }),
 
-  createWorkspaceSession: (workspaceId: string, body: { title?: string } = {}) =>
-    json<{ session: SessionInfo }>(`/api/workspaces/${workspaceId}/sessions`, {
+  createWorkspaceSession: (sandboxId: string, body: { title?: string } = {}) =>
+    json<{ session: SessionInfo }>(`/api/sandboxes/${sandboxId}/sessions`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -245,5 +245,35 @@ export const api = {
   sandboxSelfTest: () =>
     json<{ ok: boolean; checks: Array<{ name: string; ok: boolean; detail: string }> }>("/api/sandbox/self-test", {
       method: "POST",
+    }),
+
+  getSettings: () =>
+    json<{
+      settings: {
+        providers: Array<{ key: string; configured: boolean }>;
+        defaults: { defaultModel: string | null; defaultThinkingLevel: string | null };
+        rootFolder: string | null;
+      };
+    }>("/api/settings"),
+
+  saveProviderKeys: (keys: Record<string, string>) =>
+    json<{ ok: boolean }>("/api/settings/providers", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ keys }),
+    }),
+
+  saveDefaults: (body: { defaultModel?: string | null; defaultThinkingLevel?: string | null }) =>
+    json<{ ok: boolean }>("/api/settings/defaults", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+
+  saveRootFolder: (path: string | null) =>
+    json<{ ok: boolean; rootFolder: string | null }>("/api/settings/root", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ path }),
     }),
 };

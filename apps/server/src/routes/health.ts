@@ -63,8 +63,8 @@ export function registerHealthRoutes(app: AppFastify, deps: HealthDeps): void {
       },
       database: {
         ok: true,
-        projects: deps.sandbox.projectCount(),
         workspaces: deps.sandbox.workspaceCount(),
+        sandboxes: deps.sandbox.sandboxCount(),
         sessions: deps.sessions.sessionCount(),
       },
       realtime: { seq: deps.hub.currentSeq() },
