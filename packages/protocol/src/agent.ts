@@ -34,6 +34,7 @@ export const AGENT_COMMAND_TYPES = [
   "agent.session.compact",
   "agent.session.setModel",
   "agent.session.setThinkingLevel",
+  "agent.session.dispose",
   "agent.session.list",
   "agent.shutdown",
 ] as const;

@@ -166,6 +166,11 @@ export class AgentManager {
     await this.require(workspaceId).request("agent.session.setThinkingLevel", { sessionId, level }, 10_000);
   }
 
+  async disposeSession(workspaceId: string, sessionId: string): Promise<void> {
+    await this.waitForConnection(workspaceId, 3_000).catch(() => undefined);
+    await this.require(workspaceId).request("agent.session.dispose", { sessionId }, 10_000);
+  }
+
   async spawnProcess(workspaceId: string, request: AgentProcessSpawnRequest): Promise<AgentProcessInfo> {
     return this.require(workspaceId).spawnProcess(request);
   }

@@ -69,4 +69,16 @@ export function registerSessionRoutes(
     }
     return { ok: true };
   });
+
+  app.delete("/api/sessions/:sessionId", async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string };
+    if (workspaceSessions.owns(sessionId)) {
+      await workspaceSessions.dispose(sessionId);
+    } else if (sessions.get(sessionId)) {
+      await sessions.disposeSession(sessionId);
+    } else {
+      return reply.code(404).send({ error: "not_found" });
+    }
+    return { ok: true };
+  });
 }

@@ -108,6 +108,23 @@ export class SessionManager {
     await mapping.driver.abort(mapping.driverSessionId);
   }
 
+  async disposeSession(sessionId: string): Promise<void> {
+    const mapping = this.drivers.get(sessionId);
+    if (mapping) {
+      await mapping.driver.dispose(mapping.driverSessionId).catch(() => undefined);
+      this.drivers.delete(sessionId);
+      this.checkpoints.delete(sessionId);
+    }
+    this.db.delete(schema.sessions).where(eq(schema.sessions.id, sessionId)).run();
+    this.hub.publish({
+      scope: "session",
+      sessionId,
+      type: EVENT_TYPES.sessionClosed,
+      payload: { sessionId, reason: "deleted" },
+    });
+    this.logger.info({ sessionId }, "session deleted");
+  }
+
   async setModel(sessionId: string, model: string): Promise<void> {
     const mapping = this.require(sessionId);
     await mapping.driver.setModel(mapping.driverSessionId, { id: model });

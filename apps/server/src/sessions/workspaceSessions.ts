@@ -172,6 +172,21 @@ export class WorkspaceSessionManager {
       .run();
   }
 
+  async dispose(sessionId: string): Promise<void> {
+    const { workspaceId } = this.require(sessionId);
+    // Best-effort agent-side disposal (the agent may be offline); the
+    // control-plane record is authoritative for cleanup.
+    await this.agents.disposeSession(workspaceId, sessionId).catch(() => undefined);
+    this.db.delete(schema.sessions).where(eq(schema.sessions.id, sessionId)).run();
+    this.hub.publish({
+      scope: "session",
+      sessionId,
+      type: EVENT_TYPES.sessionClosed,
+      payload: { sessionId, reason: "deleted" },
+    });
+    this.logger.info({ sessionId, workspaceId }, "workspace session deleted");
+  }
+
   list(workspaceId?: string): SessionInfo[] {
     const rows = workspaceId
       ? this.db.select().from(schema.sessions).where(eq(schema.sessions.workspaceId, workspaceId)).orderBy(desc(schema.sessions.createdAt)).all()

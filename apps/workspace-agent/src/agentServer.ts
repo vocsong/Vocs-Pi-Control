@@ -266,6 +266,12 @@ export async function startAgentServer(options: AgentServerOptions): Promise<Age
           socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } } satisfies AgentEvent));
           return;
         }
+        case "agent.session.dispose": {
+          const request = command.payload as { sessionId: string };
+          await sessionSupervisor.dispose(request.sessionId);
+          socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } } satisfies AgentEvent));
+          return;
+        }
         case "agent.session.list": {
           socket.send(
             JSON.stringify({ type: "agent.session.list", payload: { sessions: sessionSupervisor.list(), commandId: command.id } } satisfies AgentEvent),
