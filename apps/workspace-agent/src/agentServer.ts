@@ -29,6 +29,7 @@ import { EmbeddedPiDriver } from "@pi-control/pi-driver/embedded";
 import { AGENT_VERSION, type AgentConfig } from "./config.js";
 import { runExec, toExitPayload } from "./exec.js";
 import { FileService } from "./fileService.js";
+import { GitService } from "./gitService.js";
 import { ProcessSupervisor } from "./processSupervisor.js";
 import { SessionSupervisor } from "./sessionSupervisor.js";
 
@@ -70,6 +71,7 @@ export async function startAgentServer(options: AgentServerOptions): Promise<Age
     onEvent: (sessionId, envelope) => broadcast({ type: "agent.session.event", payload: { sessionId, envelope } }),
   });
   const files = new FileService(process.env.PI_CONTROL_WORKSPACE_ROOT ?? "/workspace");
+  const git = new GitService(process.env.PI_CONTROL_WORKSPACE_ROOT ?? "/workspace");
 
   const broadcast = (event: AgentEvent): void => {
     for (const client of clients) {
@@ -332,6 +334,52 @@ export async function startAgentServer(options: AgentServerOptions): Promise<Age
           socket.send(
             JSON.stringify({ type: "agent.file.ok", payload: { ok: true, path: request.to, commandId: command.id } } satisfies AgentEvent),
           );
+          return;
+        }
+        case "agent.git.status": {
+          const result = await git.status();
+          socket.send(JSON.stringify({ type: "agent.git.status", payload: { ...result, commandId: command.id } } satisfies AgentEvent));
+          return;
+        }
+        case "agent.git.diff": {
+          const request = command.payload as { staged?: boolean };
+          const diff = await git.diff(request.staged ?? false);
+          socket.send(JSON.stringify({ type: "agent.git.diff", payload: { diff, commandId: command.id } } satisfies AgentEvent));
+          return;
+        }
+        case "agent.git.stage": {
+          const request = command.payload as { paths: string[] };
+          await git.stage(request.paths);
+          socket.send(JSON.stringify({ type: "agent.git.ok", payload: { ok: true, path: "", commandId: command.id } } satisfies AgentEvent));
+          return;
+        }
+        case "agent.git.unstage": {
+          const request = command.payload as { paths: string[] };
+          await git.unstage(request.paths);
+          socket.send(JSON.stringify({ type: "agent.git.ok", payload: { ok: true, path: "", commandId: command.id } } satisfies AgentEvent));
+          return;
+        }
+        case "agent.git.commit": {
+          const request = command.payload as { message: string };
+          const hash = await git.commit(request.message);
+          socket.send(JSON.stringify({ type: "agent.git.commit", payload: { hash, commandId: command.id } } satisfies AgentEvent));
+          return;
+        }
+        case "agent.git.branches": {
+          const result = await git.branches();
+          socket.send(JSON.stringify({ type: "agent.git.branches", payload: { ...result, commandId: command.id } } satisfies AgentEvent));
+          return;
+        }
+        case "agent.git.branchCreate": {
+          const request = command.payload as { name: string; from?: string };
+          await git.branchCreate(request.name, request.from);
+          socket.send(JSON.stringify({ type: "agent.git.ok", payload: { ok: true, path: "", commandId: command.id } } satisfies AgentEvent));
+          return;
+        }
+        case "agent.git.log": {
+          const request = command.payload as { max?: number };
+          const entries = await git.log(request.max ?? 20);
+          socket.send(JSON.stringify({ type: "agent.git.log", payload: { entries, commandId: command.id } } satisfies AgentEvent));
           return;
         }
       }

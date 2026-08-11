@@ -202,6 +202,43 @@ export class AgentManager {
     await this.require(workspaceId).request("agent.file.rename", { from, to }, 15_000);
   }
 
+  async gitStatus(workspaceId: string) {
+    const event = await this.require(workspaceId).request("agent.git.status", {}, 15_000);
+    return event.payload;
+  }
+
+  async gitDiff(workspaceId: string, staged: boolean) {
+    const event = await this.require(workspaceId).request("agent.git.diff", { staged }, 30_000);
+    return event.payload;
+  }
+
+  async gitStage(workspaceId: string, paths: string[]): Promise<void> {
+    await this.require(workspaceId).request("agent.git.stage", { paths }, 30_000);
+  }
+
+  async gitUnstage(workspaceId: string, paths: string[]): Promise<void> {
+    await this.require(workspaceId).request("agent.git.unstage", { paths }, 30_000);
+  }
+
+  async gitCommit(workspaceId: string, message: string) {
+    const event = await this.require(workspaceId).request("agent.git.commit", { message }, 30_000);
+    return event.payload;
+  }
+
+  async gitBranches(workspaceId: string) {
+    const event = await this.require(workspaceId).request("agent.git.branches", {}, 15_000);
+    return event.payload;
+  }
+
+  async gitBranchCreate(workspaceId: string, name: string, from?: string): Promise<void> {
+    await this.require(workspaceId).request("agent.git.branchCreate", { name, from }, 15_000);
+  }
+
+  async gitLog(workspaceId: string) {
+    const event = await this.require(workspaceId).request("agent.git.log", { max: 30 }, 15_000);
+    return event.payload;
+  }
+
   async spawnProcess(workspaceId: string, request: AgentProcessSpawnRequest): Promise<AgentProcessInfo> {
     return this.require(workspaceId).spawnProcess(request);
   }

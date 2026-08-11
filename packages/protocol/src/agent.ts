@@ -42,6 +42,14 @@ export const AGENT_COMMAND_TYPES = [
   "agent.file.mkdir",
   "agent.file.remove",
   "agent.file.rename",
+  "agent.git.status",
+  "agent.git.diff",
+  "agent.git.stage",
+  "agent.git.unstage",
+  "agent.git.commit",
+  "agent.git.branches",
+  "agent.git.branchCreate",
+  "agent.git.log",
   "agent.shutdown",
 ] as const;
 
@@ -180,6 +188,72 @@ export interface AgentFileOkPayload {
 }
 
 /* ------------------------------------------------------------------ */
+/* Git service (Phase 7)                                               */
+/* ------------------------------------------------------------------ */
+
+export interface AgentGitChange {
+  path: string;
+  index: string;
+  worktree: string;
+  staged: boolean;
+  untracked: boolean;
+}
+
+export interface AgentGitStatusPayload {
+  branch: string;
+  ahead: number;
+  behind: number;
+  changes: AgentGitChange[];
+  commandId?: string;
+}
+
+export interface AgentGitDiffPayload {
+  diff: string;
+  commandId?: string;
+}
+
+export interface AgentGitStageRequest {
+  paths: string[];
+}
+
+export interface AgentGitCommitRequest {
+  message: string;
+}
+
+export interface AgentGitCommitPayload {
+  hash: string;
+  commandId?: string;
+}
+
+export interface AgentGitBranch {
+  name: string;
+  current: boolean;
+}
+
+export interface AgentGitBranchesPayload {
+  current: string;
+  branches: AgentGitBranch[];
+  commandId?: string;
+}
+
+export interface AgentGitBranchCreateRequest {
+  name: string;
+  from?: string;
+}
+
+export interface AgentGitLogEntry {
+  hash: string;
+  subject: string;
+  author: string;
+  date: string;
+}
+
+export interface AgentGitLogPayload {
+  entries: AgentGitLogEntry[];
+  commandId?: string;
+}
+
+/* ------------------------------------------------------------------ */
 /* Agent -> server events                                              */
 /* ------------------------------------------------------------------ */
 
@@ -199,6 +273,12 @@ export const AGENT_EVENT_TYPES = [
   "agent.file.list",
   "agent.file.read",
   "agent.file.ok",
+  "agent.git.status",
+  "agent.git.diff",
+  "agent.git.commit",
+  "agent.git.branches",
+  "agent.git.log",
+  "agent.git.ok",
   "agent.error",
 ] as const;
 

@@ -19,6 +19,7 @@ import { SessionManager } from "./sessions/manager.js";
 import { WorkspaceSessionManager } from "./sessions/workspaceSessions.js";
 import { SandboxManager } from "./sandbox/manager.js";
 import { selectRuntime } from "./sandbox/runtimeFactory.js";
+import { GitWorktreeService } from "./git/worktrees.js";
 import { AgentManager } from "./agents/agentManager.js";
 import { buildApp } from "./app.js";
 
@@ -78,8 +79,9 @@ async function main(): Promise<void> {
   sandbox.restoreSandboxes();
   sandbox.restoreAgents();
   await sandbox.refreshDetection();
+  const worktrees = new GitWorktreeService(sandbox, logger);
 
-  const app = await buildApp({ logger, db, hub, sessions, workspaceSessions, sandbox, agents, leases, runtimeName: runtime.name });
+  const app = await buildApp({ logger, db, hub, sessions, workspaceSessions, sandbox, agents, worktrees, leases, runtimeName: runtime.name });
 
   try {
     await app.listen({ host: config.host, port: config.port });

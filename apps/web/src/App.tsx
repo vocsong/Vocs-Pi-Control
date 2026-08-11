@@ -6,6 +6,7 @@ import { Sidebar } from "./components/Sidebar";
 import { ChatView } from "./components/ChatView";
 import { Composer } from "./components/Composer";
 import { FilesView } from "./components/FilesView";
+import { GitView } from "./components/GitView";
 import { StatusBar } from "./components/StatusBar";
 
 type Tab = "chat" | "files" | "git" | "terminal";
@@ -136,7 +137,7 @@ export function App() {
             </>
           )}
           {tab === "files" && <FilesView />}
-          {tab === "git" && <div className="tab-placeholder">Git view (Phase 7)</div>}
+          {tab === "git" && <GitView />}
           {tab === "terminal" && <div className="tab-placeholder">Terminal view (Phase 8)</div>}
         </div>
       </div>

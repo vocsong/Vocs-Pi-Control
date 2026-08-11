@@ -54,6 +54,9 @@ export interface CreateWorkspaceInput {
   securityProfile?: "standard" | "restricted" | "trusted";
   imageRef?: string;
   resources?: { cpuCores?: number; memoryGiB?: number; pidLimit?: number };
+  /** Worktree workspaces record their branch (plan §14). */
+  kind?: "main" | "worktree" | "directory";
+  gitBranch?: string;
 }
 
 const CONTAINER_WORKSPACE_PATH = "/workspace";
@@ -180,6 +183,11 @@ export class SandboxManager {
     return this.options.db.select().from(schema.projects).orderBy(desc(schema.projects.createdAt)).all().map(toProjectInfo);
   }
 
+  projectById(projectId: string): ProjectInfo | null {
+    const row = this.options.db.select().from(schema.projects).where(eq(schema.projects.id, projectId)).get();
+    return row ? toProjectInfo(row) : null;
+  }
+
   /* ------------------------------------------------------------------ */
   /* Workspaces                                                          */
   /* ------------------------------------------------------------------ */
@@ -254,7 +262,8 @@ export class SandboxManager {
       name: input.name,
       hostPath,
       containerWorkspacePath: CONTAINER_WORKSPACE_PATH,
-      kind: "main",
+      kind: input.kind ?? "main",
+      gitBranch: input.gitBranch ?? null,
       securityProfile: spec.securityProfile,
       sandboxId: sandbox.id,
       createdAt: now,

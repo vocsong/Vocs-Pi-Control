@@ -15,6 +15,8 @@ import { registerProjectRoutes } from "./routes/projects.js";
 import { registerWorkspaceRoutes } from "./routes/workspaces.js";
 import { registerSandboxRoutes } from "./routes/sandbox.js";
 import { registerFileRoutes } from "./routes/files.js";
+import { registerGitRoutes } from "./routes/git.js";
+import { GitWorktreeService } from "./git/worktrees.js";
 import type { AppFastify } from "./types.js";
 
 export interface AppDeps {
@@ -25,6 +27,7 @@ export interface AppDeps {
   workspaceSessions: WorkspaceSessionManager;
   sandbox: SandboxManager;
   agents: AgentManager;
+  worktrees: GitWorktreeService;
   leases: LeaseManager;
   runtimeName: string;
 }
@@ -48,6 +51,7 @@ export async function buildApp(deps: AppDeps): Promise<AppFastify> {
   registerWorkspaceRoutes(app, deps.sandbox, deps.agents);
   registerSandboxRoutes(app, deps.sandbox);
   registerFileRoutes(app, deps.agents);
+  registerGitRoutes(app, deps.agents, deps.worktrees);
   registerRealtime(app, deps);
 
   return app as AppFastify;

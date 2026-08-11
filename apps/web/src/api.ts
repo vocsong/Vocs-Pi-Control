@@ -80,6 +80,53 @@ export const api = {
       body: JSON.stringify({ from, to }),
     }),
 
+  gitStatus: (workspaceId: string) => json<unknown>(`/api/workspaces/${workspaceId}/git/status`),
+
+  gitDiff: (workspaceId: string, staged = false) =>
+    json<unknown>(`/api/workspaces/${workspaceId}/git/diff?staged=${staged ? 1 : 0}`),
+
+  gitStage: (workspaceId: string, paths: string[]) =>
+    json<{ ok: boolean }>(`/api/workspaces/${workspaceId}/git/stage`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ paths }),
+    }),
+
+  gitUnstage: (workspaceId: string, paths: string[]) =>
+    json<{ ok: boolean }>(`/api/workspaces/${workspaceId}/git/unstage`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ paths }),
+    }),
+
+  gitCommit: (workspaceId: string, message: string) =>
+    json<unknown>(`/api/workspaces/${workspaceId}/git/commit`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ message }),
+    }),
+
+  gitBranches: (workspaceId: string) => json<unknown>(`/api/workspaces/${workspaceId}/git/branches`),
+
+  gitBranchCreate: (workspaceId: string, name: string) =>
+    json<{ ok: boolean }>(`/api/workspaces/${workspaceId}/git/branches`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name }),
+    }),
+
+  gitLog: (workspaceId: string) => json<unknown>(`/api/workspaces/${workspaceId}/git/log`),
+
+  createWorktree: (projectId: string, body: { name: string; branch?: string }) =>
+    json<{ worktree: { workspaceId: string; worktreePath: string; branch: string } }>(
+      `/api/projects/${projectId}/worktrees`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    ),
+
   listProjects: () => json<{ projects: ProjectInfo[] }>("/api/projects"),
 
   createProject: (body: { name: string; hostRootPath: string }) =>

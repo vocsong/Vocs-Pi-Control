@@ -209,6 +209,12 @@ export class AgentClient {
       case "agent.file.list":
       case "agent.file.read":
       case "agent.file.ok":
+      case "agent.git.status":
+      case "agent.git.diff":
+      case "agent.git.commit":
+      case "agent.git.branches":
+      case "agent.git.log":
+      case "agent.git.ok":
         this.resolve((event.payload as { commandId?: string }).commandId ?? "", event);
         return;
       case "agent.exec.exit":

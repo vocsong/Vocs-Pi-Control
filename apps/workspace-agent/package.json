@@ -15,6 +15,7 @@
     "@pi-control/pi-driver": "workspace:*",
     "@pi-control/protocol": "workspace:*",
     "@pi-control/shared": "workspace:*",
+    "execa": "^9.6.1",
     "ws": "^8.18.0"
   },
   "devDependencies": {
