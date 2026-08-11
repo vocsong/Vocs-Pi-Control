@@ -92,7 +92,9 @@ async function main(): Promise<void> {
     rootFolder: () => settings.rootFolder(),
   });
   sandbox.restoreSandboxes();
-  sandbox.restoreAgents();
+  // Server restart policy: everything stopped, folders synced from the root.
+  await sandbox.stopAllSandboxes();
+  sandbox.syncWorkspacesFromRoot();
   await sandbox.refreshDetection();
   const worktrees = new GitWorktreeService(sandbox, logger);
 

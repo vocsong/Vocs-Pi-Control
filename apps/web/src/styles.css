@@ -482,11 +482,18 @@ body {
   gap: 2px;
 }
 
+.session-li {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .session-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 7px 8px;
   border: 1px solid transparent;
   border-radius: var(--radius);
@@ -495,6 +502,25 @@ body {
   cursor: pointer;
   text-align: left;
   font-size: 13px;
+}
+
+.session-delete {
+  flex: none;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 4px;
+  opacity: 0;
+}
+
+.session-li:hover .session-delete {
+  opacity: 1;
+}
+
+.session-delete:hover {
+  color: var(--danger);
 }
 
 .session-item:hover {

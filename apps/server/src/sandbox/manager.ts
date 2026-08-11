@@ -228,7 +228,7 @@ export class SandboxManager {
     this.options.logger.info({ workspaceId: record.id, hostRootPath }, "workspace created");
 
     // Auto-create the primary sandbox (the container for this workspace),
-    // named after the workspace, ready to start.
+    // named after the workspace, then START it — creation == running.
     const sandbox = await this.createSandbox(record.id, {
       name: input.name,
       hostPath: input.sandboxHostPath,
@@ -237,8 +237,86 @@ export class SandboxManager {
       profile: input.profile,
       securityProfile: input.securityProfile,
     });
+    try {
+      await this.startSandbox(sandbox.id);
+    } catch (error) {
+      this.options.logger.warn({ sandboxId: sandbox.id, error: String(error) }, "auto-start failed; sandbox left stopped");
+    }
+    const started = await this.sandboxInfo(sandbox.id);
 
-    return { workspace: toWorkspaceInfo(record), sandbox };
+    return { workspace: toWorkspaceInfo(record), sandbox: started };
+  }
+
+  /**
+   * Scan the workspace root: every subfolder appears as a workspace (not
+   * started). Only explicit creation starts the sandbox; a server restart
+   * leaves everything stopped until the user presses start.
+   */
+  syncWorkspacesFromRoot(): number {
+    const root = this.options.rootFolder();
+    let created = 0;
+    let names: string[];
+    try {
+      names = fs.readdirSync(root);
+    } catch {
+      return 0;
+    }
+    for (const name of names) {
+      if (name.startsWith(".")) continue;
+      const folder = path.join(root, name);
+      let stat: fs.Stats;
+      try {
+        stat = fs.statSync(folder);
+      } catch {
+        continue;
+      }
+      if (!stat.isDirectory()) continue;
+      const existing = this.options.db
+        .select()
+        .from(schema.projects)
+        .where(eq(schema.projects.hostRootPath, folder))
+        .get();
+      if (existing) continue;
+      const now = nowIso();
+      this.options.db.insert(schema.projects).values({
+        id: newId("ws"),
+        machineId: "machine_local",
+        name,
+        hostRootPath: folder,
+        gitRepositoryRoot: null,
+        createdAt: now,
+        lastOpenedAt: now,
+      }).run();
+      this.options.hub.publish({
+        scope: "server",
+        type: EVENT_TYPES.workspaceCreated,
+        payload: { workspace: { id: newId("ws"), machineId: "machine_local", name, hostRootPath: folder, createdAt: now } },
+      });
+      created++;
+    }
+    if (created > 0) this.options.logger.info({ created }, "workspaces synced from root folder");
+    return created;
+  }
+
+  /** Stop every sandbox container (server restart policy: all stopped). */
+  async stopAllSandboxes(): Promise<void> {
+    const rows = this.options.db.select().from(schema.workspaces).all().filter((r) => r.sandboxId);
+    for (const row of rows) {
+      try {
+        await this.options.runtime.stopWorkspace(row.sandboxId as string);
+      } catch {
+        // container may already be gone
+      }
+      this.updateSandboxState(row.sandboxId as string, "stopped");
+    }
+    // Sessions whose sandbox stopped are marked stopped for explicit resume.
+    if (rows.length > 0) {
+      this.options.db
+        .update(schema.sessions)
+        .set({ status: "stopped", updatedAt: nowIso() })
+        .run();
+    }
+    this.options.logger.info({ stopped: rows.length }, "all sandboxes stopped after server start");
   }
 
   listWorkspaces(): WorkspaceInfo[] {
@@ -643,6 +721,15 @@ export class SandboxManager {
     },
     fallbackStatus?: SandboxStatus,
   ): SandboxInfo {
+    // The runtime record (schema.sandboxes) is the status source of truth;
+    // without it the row alone cannot tell running from stopped.
+    const runtimeRow = row.sandboxId
+      ? this.options.db.select().from(schema.sandboxes).where(eq(schema.sandboxes.id, row.sandboxId)).get()
+      : null;
+    const status: SandboxStatus =
+      fallbackStatus ??
+      (runtimeRow?.state as SandboxStatus | undefined) ??
+      (row.archivedAt ? "missing" : row.sandboxId ? "stopped" : "missing");
     return {
       id: row.id,
       workspaceId: row.projectId,
@@ -653,7 +740,7 @@ export class SandboxManager {
       kind: row.kind as SandboxInfo["kind"],
       gitBranch: row.gitBranch ?? undefined,
       securityProfile: row.securityProfile as SandboxInfo["securityProfile"],
-      status: fallbackStatus ?? (row.archivedAt ? "missing" : "stopped"),
+      status,
       createdAt: row.createdAt,
       archivedAt: row.archivedAt ?? undefined,
     };

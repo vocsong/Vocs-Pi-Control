@@ -84,12 +84,15 @@ function WorkspaceRow({ workspace }: { workspace: WorkspaceInfo }) {
   const setActiveWorkspace = usePiControl((s) => s.setActiveWorkspace);
   const startWorkspaceFlow = usePiControl((s) => s.startWorkspaceFlow);
   const stopWorkspaceFlow = usePiControl((s) => s.stopWorkspaceFlow);
-  const createWorkspaceSession = usePiControl((s) => s.createWorkspaceSession);
   const [busy, setBusy] = useState(false);
 
   const sandbox = Object.values(sandboxes).find((sb) => sb.workspaceId === workspace.id);
-  const status = SANDBOX_STATUS[sandbox?.status ?? "missing"] ?? SANDBOX_STATUS.missing!;
-  const running = sandbox?.status === "running";
+  const sandboxStatus = sandbox?.status ?? "missing";
+  const status = SANDBOX_STATUS[sandboxStatus] ?? SANDBOX_STATUS.missing!;
+  const running = sandboxStatus === "running";
+  // starting/building/stopping: transient — everything disabled.
+  const transitioning = ["starting", "building", "stopping"].includes(sandboxStatus);
+  const disabled = busy || transitioning;
 
   const act = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -102,21 +105,11 @@ function WorkspaceRow({ workspace }: { workspace: WorkspaceInfo }) {
     }
   };
 
-  const newSession = async () => {
-    // Ensure the sandbox exists + runs (server auto-creates it), then add a session.
-    if (!running) {
-      await act(() => startWorkspaceFlow(workspace.id));
-    }
-    if (sandbox || running) {
-      const current = Object.values(usePiControl.getState().sandboxes).find((sb) => sb.workspaceId === workspace.id);
-      if (current) await act(() => createWorkspaceSession(current.id));
-    }
-  };
-
   const rebuild = async () => {
     if (!sandbox) return;
     setBusy(true);
     try {
+      // Rebuild = stop -> recreate container -> start again.
       const { sandbox: rebuilt } = await api.rebuildSandbox(sandbox.id);
       usePiControl.setState((s) => ({ sandboxes: { ...s.sandboxes, [sandbox.id]: rebuilt } }));
     } catch (e) {
@@ -135,28 +128,24 @@ function WorkspaceRow({ workspace }: { workspace: WorkspaceInfo }) {
         </button>
         <span className="project-actions">
           {running ? (
-            <button className="btn btn-icon" title="Stop" disabled={busy} onClick={() => void act(() => stopWorkspaceFlow(workspace.id))}>
+            <button className="btn btn-icon" title="Stop" disabled={disabled} onClick={() => void act(() => stopWorkspaceFlow(workspace.id))}>
               ■
             </button>
           ) : (
             <button
               className="btn btn-icon"
               title="Start"
-              disabled={busy || sandbox?.status === "starting" || sandbox?.status === "building"}
+              disabled={disabled}
               onClick={() => void act(() => startWorkspaceFlow(workspace.id))}
             >
               ▶
             </button>
           )}
-          <button className="btn btn-icon" title="New Pi session" disabled={busy} onClick={() => void newSession()}>
-            +
-          </button>
-          <button className="btn btn-icon" title="Rebuild environment" disabled={busy || !sandbox} onClick={() => void rebuild()}>
+          <button className="btn btn-icon" title="Rebuild (stops and starts again)" disabled={disabled || !sandbox} onClick={() => void rebuild()}>
             ⟳
           </button>
         </span>
       </div>
-      <div className="workspace-path">{workspace.hostRootPath}</div>
     </li>
   );
 }
@@ -233,6 +222,35 @@ export function Sidebar() {
   const [addingWorkspace, setAddingWorkspace] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
 
+  const workspaceNameFor = (sessionId: string): string | null => {
+    const session = usePiControl.getState().sessions[sessionId];
+    if (!session?.workspaceId) return null;
+    const sandbox = usePiControl.getState().sandboxes[session.workspaceId];
+    const workspace = sandbox ? usePiControl.getState().workspaces[sandbox.workspaceId] : undefined;
+    return workspace?.name ?? null;
+  };
+
+  const deleteSession = async (sessionId: string) => {
+    if (!window.confirm("Delete this session?")) return;
+    try {
+      await api.deleteSession(sessionId);
+      usePiControl.setState((st) => {
+        const sessions = { ...st.sessions };
+        const items = { ...st.items };
+        delete sessions[sessionId];
+        delete items[sessionId];
+        return {
+          sessions,
+          items,
+          sessionOrder: st.sessionOrder.filter((id) => id !== sessionId),
+          activeSessionId: st.activeSessionId === sessionId ? null : st.activeSessionId,
+        };
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const newSession = async () => {
     setSessionError(null);
     try {
@@ -289,8 +307,9 @@ export function Sidebar() {
             {sessionOrder.map((id) => {
               const session = sessions[id];
               if (!session) return null;
+              const wsName = workspaceNameFor(id);
               return (
-                <li key={id}>
+                <li key={id} className="session-li">
                   <button
                     className={`session-item ${id === activeSessionId ? "active" : ""}`}
                     onClick={() => setActive(id)}
@@ -299,7 +318,10 @@ export function Sidebar() {
                       {STATUS_DOT[session.status] ?? "○"}
                     </span>
                     <span className="session-title">{session.title}</span>
-                    <span className="session-badge">sandbox</span>
+                    {wsName && <span className="session-badge">{wsName}</span>}
+                  </button>
+                  <button className="session-delete" title="Delete session" onClick={() => void deleteSession(id)}>
+                    ✕
                   </button>
                 </li>
               );
