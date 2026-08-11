@@ -1,6 +1,7 @@
 # Workspace Agent Architecture
 
-See ADR-0006 for the decision; this page details the design.
+See ADR-0006 for the decision; this page details the Phase 2+ design and
+the Phase 3 additions.
 
 ## Purpose
 
@@ -8,14 +9,12 @@ See ADR-0006 for the decision; this page details the design.
 container. It is the *only* thing inside the sandbox that talks to the
 control server. It owns:
 
-- Pi session lifecycle (create/resume/prompt/abort) via `PiSessionDriver`;
-- translation of Pi driver events into pi-control protocol events;
-- PTYs and terminals (xterm.js over the protocol);
-- long-running workspace processes and dev servers;
-- health/resource reporting;
-- controlled file/Git/process operations where appropriate;
-- reconnect semantics — it survives browser disconnects and control-server
-  restarts.
+- Pi session lifecycle via `SessionSupervisor` + `EmbeddedPiDriver`;
+- translation of Pi driver events into protocol envelope inits;
+- PTYs and terminals (Phase 8);
+- long-running workspace processes (detached, survives server restarts);
+- health/resource reporting (5s heartbeat);
+- one-shot exec for controlled operations.
 
 ## Why not `podman exec`
 
@@ -25,30 +24,61 @@ cost once and provides clean supervision (plan §11.2).
 
 ## Communication
 
-- Versioned protocol (packages/protocol) over an authenticated WebSocket
-  between control server and agent.
-- Per-sandbox random secret injected at container start, stored in
-  control-plane state (`sandboxes.configJson` / env at create time).
-- Loopback-only forwarding; the agent endpoint is never public.
-- Heartbeat + health reporting; control server marks the agent down on
-  timeout and surfaces an actionable status (plan §49).
+- Versioned agent protocol (`packages/protocol/src/agent.ts`) over an
+  authenticated WebSocket.
+- **Direction**: the control server connects OUT to the agent. The
+  workspace container publishes `127.0.0.1:<hostPort>:4175` at creation;
+  the agent listens on 4175 inside the sandbox and the server connects to
+  the host-side forward. This works identically on Linux, macOS and
+  Windows/WSL machines.
+- **Auth**: per-sandbox random token (32 random bytes, hex) generated at
+  workspace creation, stored in the sandbox record, injected as
+  `PI_CONTROL_AGENT_TOKEN`, presented as `Authorization: Bearer` on the
+  upgrade (constant-time compare, 4001 on failure).
+- Inside the container the agent binds `0.0.0.0` because published ports
+  route to the container interface — not public exposure since the host
+  side is loopback-only and token-authenticated.
+- Heartbeat + health reporting; the server reconnects with backoff and
+  re-syncs state (`agent.ready` carries processes + sessions).
 
-## Internal components (Phase 2+)
+## Agent protocol (summary)
+
+**Commands (server → agent):** `agent.hello` (identity + provider env),
+`agent.ping`, `agent.exec`, `agent.process.spawn|kill|list`,
+`agent.session.create|resume|prompt|steer|followUp|abort|compact|setModel|
+setThinkingLevel|list`, `agent.shutdown`.
+
+**Events (agent → server):** `agent.ready`, `agent.health`,
+`agent.ok` (command response), `agent.exec.output|exit`,
+`agent.process.started|output|exited|list`,
+`agent.session.created|event|list`, `agent.error`.
+
+Every command carries a request id; responses carry it back
+(`commandId`) so the server resolves pending requests. Broadcast events
+(process output, session driver events) flow without request ids.
+
+## Internal components (Phase 3)
 
 ```text
 workspace-agent
-├── control connection      authenticated WS + heartbeat
-├── session supervisor      Map<controlSessionId, ManagedPiSession>
-├── pi driver               EmbeddedPiDriver (Phase 3) / MockPiDriver (tests)
-├── pty manager             terminal sessions
-├── process supervisor      long-running processes, exit codes
-└── port reporter           discovered listeners → control server proxy
+├── agent server             token auth, command dispatch, broadcast
+├── SessionSupervisor        Map<controlSessionId, ManagedPiSession>
+├── EmbeddedPiDriver         official Pi SDK (ESM, lazy file-URL import)
+├── ProcessSupervisor        detached processes, output ring buffer
+└── exec                     one-shot commands (timeout, output cap)
 ```
+
+`EmbeddedPiDriver` loads `@earendil-works/pi-coding-agent` lazily: the CJS
+bundle cannot `import()` bare ESM specifiers (NODE_PATH is ignored by ESM)
+and `require.resolve` cannot resolve ESM-only exports, so the driver walks
+`NODE_PATH` entries + `node_modules` ancestors + the image's fixed
+`/opt/pi-control/node_modules` location and imports the entry file by URL.
+See `packages/pi-driver/src/embedded.ts` and the base image Dockerfile.
 
 ## Relationship to the control server
 
-- Control server is authoritative for workspace lifecycle (start/stop/rebuild)
-  and never embeds the active agent runtime (plan §5.1).
-- Workspace agent is authoritative for anything inside the sandbox.
+- The control server is authoritative for workspace lifecycle
+  (start/stop/rebuild) and never embeds the active agent runtime.
+- The workspace agent is authoritative for anything inside the sandbox.
 - The browser never talks to the workspace agent directly — everything goes
   through the control server (Invariant F).

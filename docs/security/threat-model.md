@@ -43,13 +43,18 @@ Assume:
 | Replay/reconnect confusion | seq-based bounded replay; idempotent commands with request ids (ADR-0007) |
 | Data loss on rebuild | persistent `/state` volume; native Pi sessions are source of truth (ADR-0005) |
 
-## V1 secret exposure boundary (documented, not hidden)
+## V1 secret exposure boundary (implemented, documented, not hidden)
 
-In V1 the control server holds LLM provider credentials and injects them into
-the Pi runtime. Shell commands may inherit a scrubbed-but-not-empty
-environment. This is a known boundary; the credential broker (ADR-0010)
-removes long-lived secrets from shell scope later. The threat model is
-revisited before V1 ships.
+Implemented as of Phase 3: the control server owns provider credential env
+vars (read from its own environment: `ANTHROPIC_API_KEY`,
+`DEEPSEEK_API_KEY`, …) and forwards them to the workspace agent inside the
+`agent.hello` payload at connect time. The agent applies them to its
+process environment; `ModelRuntime` resolves them; child shells spawned by
+the bash tool **inherit** them. This is a known boundary with a clear
+mitigation path: the credential broker (Phase 7+, ADR-0010) will move to a
+scoped provider-request flow so general shell commands never receive
+long-lived provider secrets. The per-sandbox agent token is separate from
+provider credentials and only authenticates the agent endpoint.
 
 ## Verification
 

@@ -26,6 +26,16 @@ compromised agents (plan §15, §61).
 - Every exception requires an explicit `security_grants` record and visible
   workspace security UI (plan §45).
 
+## Implementation notes (Phase 3)
+
+- Credential env vars are forwarded from the control server to the agent
+  inside `agent.hello.env` at connect time (only the known provider key
+  names); the agent applies them to its process environment.
+- `ModelRuntime.create()` resolves them via its env-var priority; the bash
+  tool's children inherit them (documented V1 boundary).
+- The per-sandbox agent token is unrelated to provider credentials and is
+  never exposed to Pi sessions.
+
 ## Consequences
 
 - Agents can develop (npm, pip, git read, tests) with zero host credentials.

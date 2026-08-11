@@ -26,3 +26,14 @@ across container rebuilds.
   deletion; native session history is never destroyed on rebuild (plan §9.2).
 - Replay of streamed events is bounded (plan §26); the native session is the
   authoritative transcript.
+
+## Implementation notes (Phase 3, pi 0.84.1)
+
+- Native sessions are created with `SessionManager.create(cwd)` where
+  `cwd=/workspace`; files land under `/state/pi-agent/sessions/...jsonl`
+  (persistent volume — verified to survive workspace restarts).
+- Resume uses `SessionManager.open(path)` via
+  `POST /api/workspaces/:id/sessions/resume`; verified live that a resumed
+  session recalls the earlier conversation.
+- The control-plane `sessions` table stores only `nativePiSessionId` and
+  `nativePiSessionPath` references, never transcript content.
