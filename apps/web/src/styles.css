@@ -138,7 +138,8 @@ body {
   background: var(--bg-input);
 }
 
-.project-node.active .project-main {
+.project-node.active .project-main,
+.workspace-row-item.active .project-main {
   background: var(--bg-input);
   border-color: var(--accent-dim);
 }
@@ -158,11 +159,7 @@ body {
 .project-actions {
   display: flex;
   gap: 2px;
-  opacity: 0;
-}
-
-.project-node:hover .project-actions,
-.workspace-node:hover .workspace-actions {
+  /* Always visible — the start/stop and rebuild buttons are primary controls. */
   opacity: 1;
 }
 
