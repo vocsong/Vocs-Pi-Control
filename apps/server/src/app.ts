@@ -17,6 +17,7 @@ import { registerSandboxRoutes } from "./routes/sandbox.js";
 import { registerFileRoutes } from "./routes/files.js";
 import { registerGitRoutes } from "./routes/git.js";
 import { registerTerminalRoutes } from "./routes/terminals.js";
+import { registerTaskRoutes } from "./routes/tasks.js";
 import { GitWorktreeService } from "./git/worktrees.js";
 import type { AppFastify } from "./types.js";
 
@@ -54,6 +55,7 @@ export async function buildApp(deps: AppDeps): Promise<AppFastify> {
   registerFileRoutes(app, deps.agents);
   registerGitRoutes(app, deps.agents, deps.worktrees);
   registerTerminalRoutes(app, deps.agents);
+  registerTaskRoutes(app, deps.db, deps.hub);
   registerRealtime(app, deps);
 
   return app as AppFastify;

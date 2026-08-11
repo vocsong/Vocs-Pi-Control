@@ -21,6 +21,7 @@ import { SandboxManager } from "./sandbox/manager.js";
 import { selectRuntime } from "./sandbox/runtimeFactory.js";
 import { GitWorktreeService } from "./git/worktrees.js";
 import { AgentManager } from "./agents/agentManager.js";
+import { recordTraceEvent } from "./observability/trace.js";
 import { buildApp } from "./app.js";
 import { fileURLToPath } from "node:url";
 
@@ -55,6 +56,7 @@ async function main(): Promise<void> {
           .run();
       }
     }
+    recordTraceEvent(db, { scope: "session", sessionId, type: envelope.type, payload: envelope.payload });
     // Event checkpoint for reconnect/replay (plan §26).
     db.insert(schema.eventCheckpoints)
       .values({ scope: "session", scopeId: sessionId, lastSeq: hub.currentSeq(), updatedAt: nowIso() })

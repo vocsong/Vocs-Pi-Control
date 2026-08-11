@@ -10,9 +10,9 @@ import { EVENT_TYPES } from "@pi-control/protocol";
 import { api } from "./api";
 
 export type ChatItem =
-  | { kind: "user"; messageId: string; content: string; createdAt: string }
-  | { kind: "assistant"; messageId: string; text: string; streaming: boolean }
-  | { kind: "thinking"; messageId: string; text: string; done: boolean; open: boolean }
+  | { kind: "user"; messageId: string; content: string; createdAt: string; ts?: number }
+  | { kind: "assistant"; messageId: string; text: string; streaming: boolean; ts?: number }
+  | { kind: "thinking"; messageId: string; text: string; done: boolean; open: boolean; ts?: number }
   | {
       kind: "tool";
       toolCallId: string;
@@ -22,6 +22,7 @@ export type ChatItem =
       durationMs?: number;
       status: "running" | "done" | "error";
       error?: string;
+      ts?: number;
     }
   | { kind: "system"; text: string; tone: "info" | "error" };
 
@@ -336,12 +337,13 @@ export const usePiControl = create<PiControlState>((set, get) => ({
           messageId: payload.messageId,
           content: payload.content,
           createdAt: payload.createdAt,
+          ts: envelope.timestamp,
         });
         break;
       }
       case EVENT_TYPES.assistantStart: {
         const payload = envelope.payload as { sessionId: string; messageId: string };
-        push({ kind: "assistant", messageId: payload.messageId, text: "", streaming: true });
+        push({ kind: "assistant", messageId: payload.messageId, text: "", streaming: true, ts: envelope.timestamp });
         break;
       }
       case EVENT_TYPES.assistantDelta: {
@@ -364,7 +366,7 @@ export const usePiControl = create<PiControlState>((set, get) => ({
       }
       case EVENT_TYPES.thinkingStart: {
         const payload = envelope.payload as { sessionId: string; messageId: string };
-        push({ kind: "thinking", messageId: payload.messageId, text: "", done: false, open: true });
+        push({ kind: "thinking", messageId: payload.messageId, text: "", done: false, open: true, ts: envelope.timestamp });
         break;
       }
       case EVENT_TYPES.thinkingDelta: {
@@ -392,7 +394,7 @@ export const usePiControl = create<PiControlState>((set, get) => ({
           name: string;
           input?: unknown;
         };
-        push({ kind: "tool", toolCallId: payload.toolCallId, name: payload.name, input: payload.input, status: "running" });
+        push({ kind: "tool", toolCallId: payload.toolCallId, name: payload.name, input: payload.input, status: "running", ts: envelope.timestamp });
         break;
       }
       case EVENT_TYPES.toolUpdate: {

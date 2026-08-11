@@ -175,6 +175,23 @@ export const api = {
   compactSession: (sessionId: string) =>
     json<{ ok: boolean }>(`/api/sessions/${sessionId}/compact`, { method: "POST" }),
 
+  listTasks: (workspaceId: string) =>
+    json<{ tasks: import("@pi-control/protocol").TaskInfo[] }>(`/api/workspaces/${workspaceId}/tasks`),
+
+  createTask: (workspaceId: string, body: { title: string; description?: string }) =>
+    json<{ task: import("@pi-control/protocol").TaskInfo }>(`/api/workspaces/${workspaceId}/tasks`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+
+  updateTask: (taskId: string, body: { status?: string; assignedSessionId?: string | null }) =>
+    json<{ task: import("@pi-control/protocol").TaskInfo }>(`/api/tasks/${taskId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+
   listProjects: () => json<{ projects: ProjectInfo[] }>("/api/projects"),
 
   createProject: (body: { name: string; hostRootPath: string }) =>

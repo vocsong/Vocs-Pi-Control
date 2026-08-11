@@ -345,6 +345,24 @@ export interface TerminalClosedPayload {
   terminalId: string;
 }
 
+export type TaskStatus = "todo" | "running" | "blocked" | "done" | "failed";
+
+export interface TaskInfo {
+  id: string;
+  workspaceId: string;
+  parentTaskId?: string;
+  title: string;
+  description?: string;
+  status: TaskStatus;
+  assignedSessionId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TaskEventPayload {
+  task: TaskInfo;
+}
+
 /* ------------------------------------------------------------------ */
 /* Event types                                                         */
 /* ------------------------------------------------------------------ */
@@ -386,6 +404,8 @@ export const EVENT_TYPES = {
   processStarted: "process.started",
   processOutput: "process.output",
   processExited: "process.exited",
+  taskCreated: "task.created",
+  taskUpdated: "task.updated",
   terminalCreated: "terminal.created",
   terminalOutput: "terminal.output",
   terminalClosed: "terminal.closed",

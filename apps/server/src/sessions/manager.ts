@@ -8,6 +8,7 @@
 
 import { schema, type Db } from "@pi-control/database";
 import { eq, desc, isNull } from "drizzle-orm";
+import { recordTraceEvent } from "../observability/trace.js";
 import {
   EVENT_TYPES,
   type EventEnvelopeInit,
@@ -175,7 +176,9 @@ export class SessionManager {
     if (!mapping) return;
     if (event.type === "usage.updated") mapping.usage = event.usage;
 
-    this.hub.publish(this.toEnvelope(sessionId, event));
+    const envelope = this.toEnvelope(sessionId, event);
+    this.hub.publish(envelope);
+    recordTraceEvent(this.db, envelope);
 
     // Persist state transitions (not every streaming event — DB writes stay rare).
     if (event.type === "state") {

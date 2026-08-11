@@ -8,10 +8,12 @@ import { Composer } from "./components/Composer";
 import { FilesView } from "./components/FilesView";
 import { GitView } from "./components/GitView";
 import { ProcessesView, TerminalView } from "./components/TerminalView";
+import { TasksView } from "./components/TasksView";
+import { TraceView } from "./components/TraceView";
 import { CommandPalette, QuickOpen, type CommandItem } from "./components/CommandPalette";
 import { StatusBar } from "./components/StatusBar";
 
-type Tab = "chat" | "files" | "git" | "terminal" | "processes";
+type Tab = "chat" | "files" | "git" | "terminal" | "processes" | "tasks" | "trace";
 
 export function App() {
   const connection = usePiControl((s) => s.connection);
@@ -237,6 +239,16 @@ export function App() {
             >
               Processes
             </button>
+            <button
+              className={`tab ${tab === "tasks" ? "active" : ""} ${!activeWorkspaceId ? "disabled" : ""}`}
+              disabled={!activeWorkspaceId}
+              onClick={() => setTab("tasks")}
+            >
+              Tasks
+            </button>
+            <button className={`tab ${tab === "trace" ? "active" : ""}`} onClick={() => setTab("trace")}>
+              Trace
+            </button>
           </div>
           {tab === "chat" && (
             <>
@@ -248,6 +260,8 @@ export function App() {
           {tab === "git" && <GitView />}
           {tab === "terminal" && <TerminalView />}
           {tab === "processes" && <ProcessesView />}
+          {tab === "tasks" && <TasksView />}
+          {tab === "trace" && <TraceView />}
         </div>
       </div>
       <StatusBar health={health} />
