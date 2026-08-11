@@ -10,6 +10,7 @@
 import fs from "node:fs";
 import net from "node:net";
 import crypto from "node:crypto";
+import path from "node:path";
 import { schema, type Db } from "@pi-control/database";
 import { desc, eq } from "drizzle-orm";
 import {
@@ -41,6 +42,8 @@ export interface SandboxManagerOptions {
   baseImage: string;
   /** Agent connections for running workspaces. */
   agents: AgentManager;
+  /** Repo root containing images/ (profile Dockerfiles). */
+  imagesDir: string;
 }
 
 export interface CreateProjectInput {
@@ -52,6 +55,8 @@ export interface CreateWorkspaceInput {
   name: string;
   hostPath: string;
   securityProfile?: "standard" | "restricted" | "trusted";
+  /** Environment profile (plan §11): maps to an image. */
+  profile?: "node" | "python" | "universal";
   imageRef?: string;
   resources?: { cpuCores?: number; memoryGiB?: number; pidLimit?: number };
   /** Worktree workspaces record their branch (plan §14). */
@@ -88,6 +93,19 @@ export async function allocateAgentHostPort(): Promise<number> {
 }
 
 const VOLUME_SUFFIXES = ["home", "state", "cache", "tools"] as const;
+
+/** Environment profile → image reference (plan §11). */
+export function imageForProfile(profile: "node" | "python" | "universal"): string {
+  if (profile === "python") return "pi-control/python:local";
+  if (profile === "universal") return "pi-control/universal:local";
+  return "pi-control/base:local";
+}
+
+export function profileForImage(imageRef: string): "node" | "python" | "universal" {
+  if (imageRef.includes("python")) return "python";
+  if (imageRef.includes("universal")) return "universal";
+  return "node";
+}
 
 export class SandboxManager {
   private detection: RuntimeDetection | null = null;
@@ -214,9 +232,12 @@ export class SandboxManager {
 
     const workspaceId = newId("ws");
     const containerName = `pi-control-${workspaceId}`;
-    const imageRef = input.imageRef ?? this.options.baseImage;
+    const imageRef = input.imageRef ?? imageForProfile(input.profile ?? "node");
     const capacity = await this.options.runtime.capacity();
     const defaults = defaultResources(capacity);
+
+    // Make sure the profile image exists (podman build is layer-cached).
+    await this.ensureProfileImage(input.profile ?? "node");
 
     // Per-sandbox agent secret + loopback-forwarded agent port (ADR-0006).
     const agentToken = crypto.randomBytes(32).toString("hex");
@@ -351,6 +372,82 @@ export class SandboxManager {
       .where(eq(schema.workspaces.id, workspaceId))
       .run();
     this.options.db.update(schema.sandboxes).set({ state: "missing" }).where(eq(schema.sandboxes.id, sandbox.id)).run();
+  }
+
+  /**
+   * Environment rebuild (plan §18.3): stop + remove the container, create a
+   * new one from the (possibly new) profile image, preserve /workspace and
+   * persistent volumes, reconnect the agent. Native Pi sessions persist in
+   * /state and can be resumed.
+   */
+  async rebuildWorkspace(workspaceId: string, profile?: "node" | "python" | "universal"): Promise<WorkspaceInfo> {
+    const workspace = this.options.db.select().from(schema.workspaces).where(eq(schema.workspaces.id, workspaceId)).get();
+    if (!workspace) throw new Error(`Unknown workspace ${workspaceId}`);
+    const sandboxRow = this.options.db.select().from(schema.sandboxes).where(eq(schema.sandboxes.id, workspace.sandboxId ?? "")).get();
+    if (!sandboxRow) throw new Error(`Workspace ${workspaceId} has no sandbox`);
+
+    const spec = JSON.parse(sandboxRow.configJson) as CreateWorkspaceSandboxSpec;
+    if (profile) {
+      spec.imageRef = imageForProfile(profile);
+      await this.ensureProfileImage(profile);
+    }
+
+    this.options.agents.disconnect(workspaceId);
+    this.setWorkspaceState(workspaceId, "building");
+    try {
+      await this.options.runtime.stopWorkspace(sandboxRow.id).catch(() => undefined);
+      await this.options.runtime.removeWorkspace(sandboxRow.id);
+
+      const rebuilt = await this.options.runtime.createWorkspace(spec);
+      this.options.runtime.registerSandbox(rebuilt.id, spec.containerName);
+      this.options.db
+        .update(schema.sandboxes)
+        .set({ imageRef: spec.imageRef, configJson: JSON.stringify(spec), containerId: rebuilt.containerId, state: "stopped", updatedAt: nowIso() })
+        .where(eq(schema.sandboxes.id, sandboxRow.id))
+        .run();
+
+      await this.options.runtime.startWorkspace(rebuilt.id);
+      this.updateSandboxState(rebuilt.id, "running");
+      this.connectAgent(workspaceId, rebuilt.id);
+
+      // Agent-side Pi sessions were lost with the old container; native
+      // session files persist in /state — mark rows stopped for explicit resume.
+      this.options.db
+        .update(schema.sessions)
+        .set({ status: "stopped", updatedAt: nowIso() })
+        .where(eq(schema.sessions.workspaceId, workspaceId))
+        .run();
+
+      this.setWorkspaceState(workspaceId, "running");
+      this.options.logger.info({ workspaceId, imageRef: spec.imageRef }, "workspace rebuilt");
+    } catch (error) {
+      this.setWorkspaceState(workspaceId, "error");
+      this.publishWorkspaceError(workspaceId, error);
+      throw error;
+    }
+    return this.workspaceInfo(workspaceId, "running");
+  }
+
+  /** Build the profile image when the runtime is podman and it is missing. */
+  private async ensureProfileImage(profile: "node" | "python" | "universal"): Promise<void> {
+    if (this.options.runtime.name !== "podman") return;
+    const imageRef = imageForProfile(profile);
+    try {
+      await this.options.runtime.pullImage(imageRef);
+      return;
+    } catch {
+      // local-only name — build from the repository Dockerfiles
+    }
+    const buildDir =
+      profile === "node"
+        ? path.join(this.options.imagesDir, "images", "base")
+        : path.join(this.options.imagesDir, "images", "profiles", profile);
+    await this.options.runtime.buildImage({
+      imageRef,
+      buildDir,
+      labels: { "pi-control.profile": profile },
+    });
+    this.options.logger.info({ profile, imageRef }, "profile image built");
   }
 
   listWorkspaces(projectId?: string): WorkspaceInfo[] {

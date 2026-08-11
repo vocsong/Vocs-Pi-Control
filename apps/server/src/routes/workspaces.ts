@@ -8,6 +8,7 @@ const createWorkspaceBody = z
     name: z.string().min(1).max(200),
     hostPath: z.string().min(1).max(4096),
     securityProfile: z.enum(["standard", "restricted", "trusted"]).optional(),
+    profile: z.enum(["node", "python", "universal"]).optional(),
     imageRef: z.string().min(1).max(500).optional(),
     resources: z
       .object({
@@ -88,6 +89,20 @@ export function registerWorkspaceRoutes(app: AppFastify, manager: SandboxManager
       await manager.removeWorkspace(workspaceId);
       agents.disconnect(workspaceId);
       return { ok: true };
+    } catch (error) {
+      return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  app.post("/api/workspaces/:workspaceId/rebuild", async (request, reply) => {
+    const { workspaceId } = request.params as { workspaceId: string };
+    const body = z
+      .object({ profile: z.enum(["node", "python", "universal"]).optional() })
+      .strict()
+      .parse(request.body ?? {});
+    try {
+      const workspace = await manager.rebuildWorkspace(workspaceId, body.profile);
+      return { workspace };
     } catch (error) {
       return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
     }

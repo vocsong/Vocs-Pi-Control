@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "concurrently -k -n server,web -c blue,green \"pnpm --filter @pi-control/server dev\" \"pnpm --filter @pi-control/web dev\"",
     "image:base": "pnpm --filter @pi-control/workspace-agent bundle && podman build -t pi-control/base:local -f images/base/Dockerfile images/base",
+    "image:profiles": "podman build -t pi-control/python:local -f images/profiles/python/Dockerfile images/profiles/python && podman build -t pi-control/universal:local -f images/profiles/universal/Dockerfile images/profiles/universal",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
     "test:watch": "vitest",

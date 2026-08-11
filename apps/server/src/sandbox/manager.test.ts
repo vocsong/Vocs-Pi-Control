@@ -37,6 +37,7 @@ function makeManager(db: Db = openTestDb()) {
     logger,
     agents,
     baseImage: "pi-control/base:local",
+    imagesDir: process.cwd(),
   });
   return { db, hub, agents, manager };
 }

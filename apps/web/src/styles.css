@@ -272,6 +272,23 @@ body {
   justify-content: flex-end;
 }
 
+.form-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.form-label select {
+  background: var(--bg-input);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
 .form-error {
   color: var(--danger);
   font-size: 11px;

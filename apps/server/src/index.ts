@@ -22,6 +22,7 @@ import { selectRuntime } from "./sandbox/runtimeFactory.js";
 import { GitWorktreeService } from "./git/worktrees.js";
 import { AgentManager } from "./agents/agentManager.js";
 import { buildApp } from "./app.js";
+import { fileURLToPath } from "node:url";
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -75,6 +76,7 @@ async function main(): Promise<void> {
     logger,
     agents,
     baseImage: process.env.PI_CONTROL_BASE_IMAGE ?? "pi-control/base:local",
+    imagesDir: fileURLToPath(new URL("../../..", import.meta.url)),
   });
   sandbox.restoreSandboxes();
   sandbox.restoreAgents();

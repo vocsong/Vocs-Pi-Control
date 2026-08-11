@@ -189,7 +189,7 @@ export const api = {
 
   createWorkspace: (
     projectId: string,
-    body: { name: string; hostPath: string; securityProfile?: string; imageRef?: string },
+    body: { name: string; hostPath: string; securityProfile?: string; profile?: string; imageRef?: string },
   ) =>
     json<{ workspace: WorkspaceInfo }>(`/api/projects/${projectId}/workspaces`, {
       method: "POST",
@@ -202,6 +202,13 @@ export const api = {
 
   stopWorkspace: (workspaceId: string) =>
     json<{ workspace: WorkspaceInfo }>(`/api/workspaces/${workspaceId}/stop`, { method: "POST" }),
+
+  rebuildWorkspace: (workspaceId: string, profile?: string) =>
+    json<{ workspace: WorkspaceInfo }>(`/api/workspaces/${workspaceId}/rebuild`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(profile ? { profile } : {}),
+    }),
 
   removeWorkspace: (workspaceId: string) =>
     json<{ ok: boolean }>(`/api/workspaces/${workspaceId}/remove`, { method: "POST" }),

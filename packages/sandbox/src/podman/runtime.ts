@@ -392,8 +392,11 @@ export class RootlessPodmanRuntime implements SandboxRuntime {
   }
 
   async buildImage(spec: BuildImageSpec): Promise<ImageInfo> {
-    const buildDir = translateHostPath(spec.buildDir).machinePath;
-    const args = ["build", "--pull", "-t", spec.imageRef];
+    // Build contexts use the RAW host path: the podman client converts
+    // Windows paths natively (pre-translating here double-converts and
+    // produces G:\mnt\g\... on Windows).
+    const buildDir = spec.buildDir;
+    const args = ["build", "--pull=missing", "-t", spec.imageRef];
     for (const [key, value] of Object.entries(spec.labels ?? {})) {
       args.push("--label", `${key}=${value}`);
     }

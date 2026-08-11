@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ProjectInfo, WorkspaceInfo } from "@pi-control/protocol";
 import { usePiControl } from "../store";
+import { api } from "../api";
 
 /* ------------------------------------------------------------------ */
 /* Status helpers                                                      */
@@ -77,6 +78,7 @@ function AddWorkspaceForm({ projectId, onDone }: { projectId: string; onDone: ()
   const createWorkspace = usePiControl((s) => s.createWorkspace);
   const [name, setName] = useState("");
   const [path, setPath] = useState("");
+  const [profile, setProfile] = useState("node");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -85,7 +87,7 @@ function AddWorkspaceForm({ projectId, onDone }: { projectId: string; onDone: ()
     setBusy(true);
     setError(null);
     try {
-      await createWorkspace(name.trim(), path.trim());
+      await createWorkspace(name.trim(), path.trim(), profile as "node" | "python" | "universal");
       onDone();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -103,6 +105,14 @@ function AddWorkspaceForm({ projectId, onDone }: { projectId: string; onDone: ()
         onChange={(e) => setPath(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && void submit()}
       />
+      <label className="form-label">
+        Environment
+        <select value={profile} onChange={(e) => setProfile(e.target.value)}>
+          <option value="node">Node</option>
+          <option value="python">Node + Python</option>
+          <option value="universal">Universal (build tools, ffmpeg)</option>
+        </select>
+      </label>
       {error && <div className="form-error">{error}</div>}
       <div className="form-actions">
         <button className="btn btn-small" onClick={() => void submit()} disabled={busy}>
@@ -129,6 +139,7 @@ function WorkspaceNode({ workspace }: { workspace: WorkspaceInfo }) {
   const createWorkspaceSession = usePiControl((s) => s.createWorkspaceSession);
   const [busy, setBusy] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [rebuilding, setRebuilding] = useState(false);
 
   const status = WORKSPACE_STATUS[workspace.status] ?? WORKSPACE_STATUS.stopped!;
 
@@ -140,6 +151,18 @@ function WorkspaceNode({ workspace }: { workspace: WorkspaceInfo }) {
       console.error(e);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const rebuild = async () => {
+    setRebuilding(true);
+    try {
+      const { workspace: rebuilt } = await api.rebuildWorkspace(workspace.id);
+      usePiControl.setState((s) => ({ workspaces: { ...s.workspaces, [workspace.id]: rebuilt } }));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setRebuilding(false);
     }
   };
 
@@ -174,6 +197,14 @@ function WorkspaceNode({ workspace }: { workspace: WorkspaceInfo }) {
               ▶
             </button>
           )}
+          <button
+            className="btn btn-icon"
+            title="Rebuild environment (preserves /workspace + volumes)"
+            disabled={busy || rebuilding || workspace.status === "building"}
+            onClick={() => void rebuild()}
+          >
+            {rebuilding ? "…" : "⟳"}
+          </button>
           {confirmRemove ? (
             <button
               className="btn btn-icon btn-danger"

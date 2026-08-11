@@ -76,7 +76,7 @@ interface PiControlState {
   createSession(): Promise<void>;
   createWorkspaceSession(workspaceId: string): Promise<void>;
   createProject(name: string, hostRootPath: string): Promise<void>;
-  createWorkspace(name: string, hostPath: string): Promise<void>;
+  createWorkspace(name: string, hostPath: string, profile?: "node" | "python" | "universal"): Promise<void>;
   startWorkspace(workspaceId: string): Promise<void>;
   stopWorkspace(workspaceId: string): Promise<void>;
   removeWorkspace(workspaceId: string): Promise<void>;
@@ -143,13 +143,14 @@ export const usePiControl = create<PiControlState>((set, get) => ({
     });
   },
 
-  createWorkspace: async (name, hostPath) => {
+  createWorkspace: async (name, hostPath, profile = "node") => {
     const projectId = get().activeProjectId;
     if (!projectId) throw new Error("no active project");
     const { workspace } = await api.createWorkspace(projectId, {
       name,
       hostPath,
       securityProfile: "standard",
+      profile,
     });
     set({
       workspaces: { ...get().workspaces, [workspace.id]: workspace },
