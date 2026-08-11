@@ -70,6 +70,8 @@ export interface CreateWorkspaceSandboxSpec {
   extraMounts?: BindMountSpec[];
   /** Explicit loopback-only port forwards (agent endpoint, dev servers). */
   ports?: { hostPort: number; containerPort: number }[];
+  /** Loopback-only port RANGES (dev-server exposure, plan §16.2). */
+  portRanges?: { hostStart: number; containerStart: number; count: number }[];
   environment?: Record<string, string>;
 }
 

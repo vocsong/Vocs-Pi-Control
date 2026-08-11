@@ -64,6 +64,16 @@ const CONTAINER_WORKSPACE_PATH = "/workspace";
 /** Port the workspace agent listens on INSIDE the container. */
 export const AGENT_CONTAINER_PORT = 4175;
 
+/**
+ * Loopback-only dev-port range published for every workspace: dev servers
+ * started inside the sandbox on these ports are reachable at
+ * http://127.0.0.1:<port> on the host (plan §16.2).
+ */
+export const DEV_PORT_RANGE = { hostStart: 43100, containerStart: 43100, count: 20 };
+
+export const DEV_PORT_RANGE_START = DEV_PORT_RANGE.hostStart;
+export const DEV_PORT_RANGE_END = DEV_PORT_RANGE.hostStart + DEV_PORT_RANGE.count - 1;
+
 /** Allocate a free loopback port for the agent's host-side forward. */
 export async function allocateAgentHostPort(): Promise<number> {
   return new Promise<number>((resolve, reject) => {
@@ -229,6 +239,7 @@ export class SandboxManager {
       },
       securityProfile: input.securityProfile ?? "standard",
       ports: [{ hostPort: agentHostPort, containerPort: AGENT_CONTAINER_PORT }],
+      portRanges: [DEV_PORT_RANGE],
       environment: {
         PI_CODING_AGENT_DIR: "/state/pi-agent",
         PI_CODING_AGENT_SESSION_DIR: "/state/pi-sessions",

@@ -29,6 +29,8 @@ export interface AgentClientEvents {
   onProcessStarted(process: AgentProcessInfo): void;
   onProcessOutput(payload: { processId: string; stream: "stdout" | "stderr"; text: string }): void;
   onProcessExited(processId: string, exitCode: number): void;
+  onTerminalOutput(terminalId: string, data: string): void;
+  onTerminalClosed(terminalId: string): void;
   onSessionEvent(sessionId: string, envelope: { scope: string; sessionId: string; type: string; payload: unknown }): void;
   onState(state: AgentConnectionState, detail?: string): void;
 }
@@ -192,6 +194,12 @@ export class AgentClient {
       case "agent.process.output":
         this.options.events.onProcessOutput(event.payload as { processId: string; stream: "stdout" | "stderr"; text: string });
         return;
+      case "agent.terminal.output":
+        this.options.events.onTerminalOutput((event.payload as { id: string; data: string }).id, (event.payload as { data: string }).data);
+        return;
+      case "agent.terminal.closed":
+        this.options.events.onTerminalClosed((event.payload as { id: string }).id);
+        return;
       case "agent.process.exited":
         this.options.events.onProcessExited(
           (event.payload as { processId: string }).processId,
@@ -215,6 +223,10 @@ export class AgentClient {
       case "agent.git.branches":
       case "agent.git.log":
       case "agent.git.ok":
+      case "agent.terminal.opened":
+      case "agent.terminal.closed":
+      case "agent.terminal.list":
+      case "agent.ports.list":
         this.resolve((event.payload as { commandId?: string }).commandId ?? "", event);
         return;
       case "agent.exec.exit":

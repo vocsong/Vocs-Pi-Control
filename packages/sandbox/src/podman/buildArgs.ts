@@ -17,6 +17,7 @@ export interface CreateContainerOptions {
   securityProfile: "standard" | "restricted" | "trusted";
   environment?: Record<string, string>;
   ports?: { hostPort: number; containerPort: number }[];
+  portRanges?: { hostStart: number; containerStart: number; count: number }[];
   command?: string[];
   workdir?: string;
 }
@@ -70,6 +71,14 @@ export function buildCreateArgs(options: CreateContainerOptions): string[] {
   if (options.ports) {
     for (const port of options.ports) {
       args.push("--publish", `127.0.0.1:${port.hostPort}:${port.containerPort}`);
+    }
+  }
+  if (options.portRanges) {
+    for (const range of options.portRanges) {
+      args.push(
+        "--publish",
+        `127.0.0.1:${range.hostStart}-${range.hostStart + range.count - 1}:${range.containerStart}-${range.containerStart + range.count - 1}`,
+      );
     }
   }
 

@@ -93,6 +93,22 @@ export class AgentManager {
         onProcessStarted: (process) => this.handleProcessStarted(workspaceId, status, process),
         onProcessOutput: (payload) => this.handleProcessOutput(workspaceId, payload),
         onProcessExited: (processId, exitCode) => this.handleProcessExited(workspaceId, status, processId, exitCode),
+        onTerminalOutput: (terminalId, data) => {
+          this.hub.publish({
+            scope: "workspace",
+            workspaceId,
+            type: EVENT_TYPES.terminalOutput,
+            payload: { workspaceId, terminalId, data },
+          });
+        },
+        onTerminalClosed: (terminalId) => {
+          this.hub.publish({
+            scope: "workspace",
+            workspaceId,
+            type: EVENT_TYPES.terminalClosed,
+            payload: { workspaceId, terminalId },
+          });
+        },
         onSessionEvent: (sessionId, envelope) => {
           this.sessionEventHook?.(sessionId, envelope);
           this.hub.publish({
@@ -237,6 +253,37 @@ export class AgentManager {
   async gitLog(workspaceId: string) {
     const event = await this.require(workspaceId).request("agent.git.log", { max: 30 }, 15_000);
     return event.payload;
+  }
+
+  async openTerminal(workspaceId: string, terminalId: string, cols: number, rows: number) {
+    const event = await this.require(workspaceId).request(
+      "agent.terminal.open",
+      { id: terminalId, cols, rows },
+      15_000,
+    );
+    return (event.payload as { terminal: unknown }).terminal;
+  }
+
+  async terminalInput(workspaceId: string, terminalId: string, data: string): Promise<void> {
+    await this.require(workspaceId).request("agent.terminal.input", { id: terminalId, data }, 10_000);
+  }
+
+  async terminalResize(workspaceId: string, terminalId: string, cols: number, rows: number): Promise<void> {
+    await this.require(workspaceId).request("agent.terminal.resize", { id: terminalId, cols, rows }, 10_000);
+  }
+
+  async closeTerminal(workspaceId: string, terminalId: string): Promise<void> {
+    await this.require(workspaceId).request("agent.terminal.close", { id: terminalId }, 10_000);
+  }
+
+  async listTerminals(workspaceId: string) {
+    const event = await this.require(workspaceId).request("agent.terminal.list", {}, 15_000);
+    return (event.payload as { terminals: unknown[] }).terminals;
+  }
+
+  async listPorts(workspaceId: string) {
+    const event = await this.require(workspaceId).request("agent.ports.list", {}, 15_000);
+    return (event.payload as { ports: Array<{ port: number; address: string }> }).ports;
   }
 
   async spawnProcess(workspaceId: string, request: AgentProcessSpawnRequest): Promise<AgentProcessInfo> {

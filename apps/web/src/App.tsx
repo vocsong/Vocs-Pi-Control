@@ -7,9 +7,10 @@ import { ChatView } from "./components/ChatView";
 import { Composer } from "./components/Composer";
 import { FilesView } from "./components/FilesView";
 import { GitView } from "./components/GitView";
+import { ProcessesView, TerminalView } from "./components/TerminalView";
 import { StatusBar } from "./components/StatusBar";
 
-type Tab = "chat" | "files" | "git" | "terminal";
+type Tab = "chat" | "files" | "git" | "terminal" | "processes";
 
 export function App() {
   const connection = usePiControl((s) => s.connection);
@@ -129,6 +130,13 @@ export function App() {
             >
               Terminal
             </button>
+            <button
+              className={`tab ${tab === "processes" ? "active" : ""} ${!activeWorkspaceId ? "disabled" : ""}`}
+              disabled={!activeWorkspaceId}
+              onClick={() => setTab("processes")}
+            >
+              Processes
+            </button>
           </div>
           {tab === "chat" && (
             <>
@@ -138,7 +146,8 @@ export function App() {
           )}
           {tab === "files" && <FilesView />}
           {tab === "git" && <GitView />}
-          {tab === "terminal" && <div className="tab-placeholder">Terminal view (Phase 8)</div>}
+          {tab === "terminal" && <TerminalView />}
+          {tab === "processes" && <ProcessesView />}
         </div>
       </div>
       <StatusBar health={health} />

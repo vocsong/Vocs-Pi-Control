@@ -50,6 +50,14 @@ export class RealtimeClient {
     return this.ws?.readyState === WebSocket.OPEN;
   }
 
+  private readonly eventListeners = new Set<(envelope: EventEnvelope) => void>();
+
+  /** Subscribe to all received envelopes (live + replay). Returns unsubscribe. */
+  onEvent(listener: (envelope: EventEnvelope) => void): () => void {
+    this.eventListeners.add(listener);
+    return () => this.eventListeners.delete(listener);
+  }
+
   sendCommand(type: ClientCommandType, payload: unknown): Promise<EventEnvelope> {
     const cmd = command(type, payload);
     return new Promise<EventEnvelope>((resolve, reject) => {
@@ -126,6 +134,13 @@ export class RealtimeClient {
       }
     }
     this.handlers.onEvent(envelope);
+    for (const listener of this.eventListeners) {
+      try {
+        listener(envelope);
+      } catch {
+        // listener errors must not break the socket loop
+      }
+    }
   }
 
   private rejectPending(error: Error): void {

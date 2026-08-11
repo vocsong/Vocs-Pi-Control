@@ -38,12 +38,17 @@ WORKDIR /workspace
 
 # Phase 3: the real Pi coding-agent SDK (ESM, resolved at runtime via
 # NODE_PATH — the agent bundle keeps it external). Pinned to the version
-# validated against the control plane.
+# validated against the control plane. node-pty powers terminals (Phase 8).
 ARG PI_CODING_AGENT_VERSION=0.84.1
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    build-essential \
+    python3 \
+  && rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /opt/pi-control \
   && cd /opt/pi-control \
   && npm init -y > /dev/null \
-  && npm install --no-audit --no-fund @earendil-works/pi-coding-agent@${PI_CODING_AGENT_VERSION} 2>&1 | tail -2
+  && npm install --no-audit --no-fund @earendil-works/pi-coding-agent@${PI_CODING_AGENT_VERSION} node-pty 2>&1 | tail -2
 
 ENV NODE_PATH=/opt/pi-control/node_modules
 

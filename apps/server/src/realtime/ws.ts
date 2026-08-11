@@ -20,6 +20,7 @@ import { newId } from "@pi-control/shared";
 import type { RealtimeHub, SocketLike } from "./hub.js";
 import type { SessionManager } from "../sessions/manager.js";
 import type { WorkspaceSessionManager } from "../sessions/workspaceSessions.js";
+import type { AgentManager } from "../agents/agentManager.js";
 import type { Logger } from "../logger.js";
 import type { AppFastify } from "../types.js";
 import { LeaseManager } from "./leases.js";
@@ -28,6 +29,7 @@ export interface RealtimeDeps {
   hub: RealtimeHub;
   sessions: SessionManager;
   workspaceSessions: WorkspaceSessionManager;
+  agents: AgentManager;
   leases: LeaseManager;
   logger: Logger;
 }
@@ -219,6 +221,35 @@ async function execute(command: ClientCommand, socket: SocketLike, clientId: str
         type: EVENT_TYPES.sessionLease,
         payload: lease,
       });
+      hub.ack(socket, command.id);
+      return;
+    }
+    case "terminal.open": {
+      const payload = z.object({ workspaceId: z.string(), cols: z.number().optional(), rows: z.number().optional() }).parse(command.payload);
+      const terminalId = `term_${crypto.randomUUID()}`;
+      const terminal = await deps.agents.openTerminal(payload.workspaceId, terminalId, payload.cols ?? 80, payload.rows ?? 24);
+      hub.ack(socket, command.id, { terminalId, terminal });
+      return;
+    }
+    case "terminal.input": {
+      const payload = z
+        .object({ workspaceId: z.string(), terminalId: z.string(), data: z.string().max(64 * 1024) })
+        .parse(command.payload);
+      await deps.agents.terminalInput(payload.workspaceId, payload.terminalId, payload.data);
+      hub.ack(socket, command.id);
+      return;
+    }
+    case "terminal.resize": {
+      const payload = z
+        .object({ workspaceId: z.string(), terminalId: z.string(), cols: z.number(), rows: z.number() })
+        .parse(command.payload);
+      await deps.agents.terminalResize(payload.workspaceId, payload.terminalId, payload.cols, payload.rows);
+      hub.ack(socket, command.id);
+      return;
+    }
+    case "terminal.close": {
+      const payload = z.object({ workspaceId: z.string(), terminalId: z.string() }).parse(command.payload);
+      await deps.agents.closeTerminal(payload.workspaceId, payload.terminalId);
       hub.ack(socket, command.id);
       return;
     }

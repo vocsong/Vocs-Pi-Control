@@ -32,6 +32,8 @@ import { FileService } from "./fileService.js";
 import { GitService } from "./gitService.js";
 import { ProcessSupervisor } from "./processSupervisor.js";
 import { SessionSupervisor } from "./sessionSupervisor.js";
+import { TerminalManager } from "./terminalManager.js";
+import { listListeningPorts } from "./ports.js";
 
 export interface AgentServerOptions {
   config: AgentConfig;
@@ -70,8 +72,13 @@ export async function startAgentServer(options: AgentServerOptions): Promise<Age
   const sessionSupervisor = new SessionSupervisor(options.driver ?? createPiDriver(logger), {
     onEvent: (sessionId, envelope) => broadcast({ type: "agent.session.event", payload: { sessionId, envelope } }),
   });
-  const files = new FileService(process.env.PI_CONTROL_WORKSPACE_ROOT ?? "/workspace");
-  const git = new GitService(process.env.PI_CONTROL_WORKSPACE_ROOT ?? "/workspace");
+  const workspaceRoot = process.env.PI_CONTROL_WORKSPACE_ROOT ?? "/workspace";
+  const files = new FileService(workspaceRoot);
+  const git = new GitService(workspaceRoot);
+  const terminals = new TerminalManager(workspaceRoot, {
+    onOutput: (terminalId, data) => broadcast({ type: "agent.terminal.output", payload: { id: terminalId, data } }),
+    onClosed: (terminalId) => broadcast({ type: "agent.terminal.closed", payload: { id: terminalId } }),
+  });
 
   const broadcast = (event: AgentEvent): void => {
     for (const client of clients) {
@@ -201,6 +208,7 @@ export async function startAgentServer(options: AgentServerOptions): Promise<Age
         }
         case "agent.shutdown": {
           processSupervisor.shutdown();
+      terminals.shutdown();
           socket.send(JSON.stringify({ type: "agent.error", payload: { message: "shutting down" } } satisfies AgentEvent));
           socket.close();
           return;
@@ -380,6 +388,43 @@ export async function startAgentServer(options: AgentServerOptions): Promise<Age
           const request = command.payload as { max?: number };
           const entries = await git.log(request.max ?? 20);
           socket.send(JSON.stringify({ type: "agent.git.log", payload: { entries, commandId: command.id } } satisfies AgentEvent));
+          return;
+        }
+        case "agent.terminal.open": {
+          const request = command.payload as { id: string; cols?: number; rows?: number; shell?: string };
+          const terminal = terminals.open(request);
+          socket.send(
+            JSON.stringify({ type: "agent.terminal.opened", payload: { terminal, commandId: command.id } } satisfies AgentEvent),
+          );
+          return;
+        }
+        case "agent.terminal.input": {
+          const request = command.payload as { id: string; data: string };
+          terminals.write(request.id, request.data);
+          socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } } satisfies AgentEvent));
+          return;
+        }
+        case "agent.terminal.resize": {
+          const request = command.payload as { id: string; cols: number; rows: number };
+          terminals.resize(request.id, request.cols, request.rows);
+          socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } } satisfies AgentEvent));
+          return;
+        }
+        case "agent.terminal.close": {
+          const request = command.payload as { id: string };
+          terminals.close(request.id);
+          socket.send(JSON.stringify({ type: "agent.terminal.closed", payload: { id: request.id, commandId: command.id } } satisfies AgentEvent));
+          return;
+        }
+        case "agent.terminal.list": {
+          socket.send(
+            JSON.stringify({ type: "agent.terminal.list", payload: { terminals: terminals.list(), commandId: command.id } } satisfies AgentEvent),
+          );
+          return;
+        }
+        case "agent.ports.list": {
+          const ports = await listListeningPorts();
+          socket.send(JSON.stringify({ type: "agent.ports.list", payload: { ports, commandId: command.id } } satisfies AgentEvent));
           return;
         }
       }

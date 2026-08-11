@@ -94,6 +94,10 @@ export const CLIENT_COMMAND_TYPES = [
   "session.lease.take",
   "session.lease.release",
   "session.lease.heartbeat",
+  "terminal.open",
+  "terminal.input",
+  "terminal.resize",
+  "terminal.close",
   "health.ping",
 ] as const;
 
@@ -318,6 +322,27 @@ export interface ProcessExitedPayload {
   exitCode: number;
 }
 
+export interface TerminalInfo {
+  id: string;
+  workspaceId: string;
+  shell: string;
+  cols: number;
+  rows: number;
+  openedAt: string;
+  buffer: string;
+}
+
+export interface TerminalOutputPayload {
+  workspaceId: string;
+  terminalId: string;
+  data: string;
+}
+
+export interface TerminalClosedPayload {
+  workspaceId: string;
+  terminalId: string;
+}
+
 /* ------------------------------------------------------------------ */
 /* Event types                                                         */
 /* ------------------------------------------------------------------ */
@@ -359,6 +384,9 @@ export const EVENT_TYPES = {
   processStarted: "process.started",
   processOutput: "process.output",
   processExited: "process.exited",
+  terminalCreated: "terminal.created",
+  terminalOutput: "terminal.output",
+  terminalClosed: "terminal.closed",
 
   commandAck: "command.ack",
   commandError: "command.error",

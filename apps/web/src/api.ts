@@ -1,4 +1,4 @@
-import type { ProjectInfo, SessionInfo, WorkspaceInfo } from "@pi-control/protocol";
+import type { AgentProcessInfo, ProjectInfo, SessionInfo, WorkspaceInfo } from "@pi-control/protocol";
 
 export interface HealthInfo {
   status: string;
@@ -126,6 +126,27 @@ export const api = {
         body: JSON.stringify(body),
       },
     ),
+
+  listTerminals: (workspaceId: string) => json<{ terminals: unknown[] }>(`/api/workspaces/${workspaceId}/terminals`),
+
+  listProcesses: (workspaceId: string) =>
+    json<{ processes: AgentProcessInfo[] }>(`/api/workspaces/${workspaceId}/processes`),
+
+  spawnProcess: (
+    workspaceId: string,
+    body: { name?: string; command: string[]; env?: Record<string, string> },
+  ) =>
+    json<{ process: AgentProcessInfo }>(`/api/workspaces/${workspaceId}/processes`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+
+  killProcess: (workspaceId: string, processId: string) =>
+    json<{ ok: boolean }>(`/api/workspaces/${workspaceId}/processes/${processId}/kill`, { method: "POST" }),
+
+  listPorts: (workspaceId: string) =>
+    json<Array<{ containerPort: number; url: string }>>(`/api/workspaces/${workspaceId}/ports`),
 
   listProjects: () => json<{ projects: ProjectInfo[] }>("/api/projects"),
 

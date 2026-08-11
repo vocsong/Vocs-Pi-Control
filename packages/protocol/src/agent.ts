@@ -50,6 +50,12 @@ export const AGENT_COMMAND_TYPES = [
   "agent.git.branches",
   "agent.git.branchCreate",
   "agent.git.log",
+  "agent.terminal.open",
+  "agent.terminal.input",
+  "agent.terminal.resize",
+  "agent.terminal.close",
+  "agent.terminal.list",
+  "agent.ports.list",
   "agent.shutdown",
 ] as const;
 
@@ -254,6 +260,72 @@ export interface AgentGitLogPayload {
 }
 
 /* ------------------------------------------------------------------ */
+/* Terminal service (Phase 8)                                          */
+/* ------------------------------------------------------------------ */
+
+export interface AgentTerminalOpenRequest {
+  id: string;
+  cols?: number;
+  rows?: number;
+  shell?: string;
+}
+
+export interface AgentTerminalInfo {
+  id: string;
+  shell: string;
+  cols: number;
+  rows: number;
+  openedAt: string;
+  /** Recent output (bounded) — used for reconnect replay. */
+  buffer: string;
+}
+
+export interface AgentTerminalOpenedPayload {
+  terminal: AgentTerminalInfo;
+  commandId?: string;
+}
+
+export interface AgentTerminalInputRequest {
+  id: string;
+  data: string;
+}
+
+export interface AgentTerminalResizeRequest {
+  id: string;
+  cols: number;
+  rows: number;
+}
+
+export interface AgentTerminalOutputPayload {
+  id: string;
+  data: string;
+}
+
+export interface AgentTerminalClosedPayload {
+  id: string;
+  commandId?: string;
+}
+
+export interface AgentTerminalListPayload {
+  terminals: AgentTerminalInfo[];
+  commandId?: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* Port discovery (Phase 8)                                            */
+/* ------------------------------------------------------------------ */
+
+export interface AgentListeningPort {
+  port: number;
+  address: string;
+}
+
+export interface AgentPortsPayload {
+  ports: AgentListeningPort[];
+  commandId?: string;
+}
+
+/* ------------------------------------------------------------------ */
 /* Agent -> server events                                              */
 /* ------------------------------------------------------------------ */
 
@@ -279,6 +351,11 @@ export const AGENT_EVENT_TYPES = [
   "agent.git.branches",
   "agent.git.log",
   "agent.git.ok",
+  "agent.terminal.opened",
+  "agent.terminal.output",
+  "agent.terminal.closed",
+  "agent.terminal.list",
+  "agent.ports.list",
   "agent.error",
 ] as const;
 
