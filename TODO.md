@@ -153,17 +153,27 @@ browser protocol; host home/sockets stayed absent — **verified live**.
 - [ ] session tree (native pi tree) — deferred: parent/child metadata lands
       with multi-agent (Phase 14); flat list + lease covers V1
 
-## Phase 10 — Power UX
+## Phase 10 — Power UX (complete)
 
-- [ ] command palette, quick-open, transcript search, responsive layout, PWA
+- [x] command palette (Ctrl+K), quick-open (Ctrl+P, filename search),
+      transcript search (Ctrl+F), Alt+Enter follow-up
+- [x] responsive mobile layout baseline, PWA (manifest + service worker),
+      title-flash notification baseline
 
-## Phase 11 — Environment Profiles
+## Phase 11 — Environment Profiles (complete)
 
-- [ ] image profiles (node/python/universal), rebuild flow, /tools persistence
+- [x] image profiles: node (base), python, universal — pnpm image:profiles
+- [x] workspace creation accepts profile; missing images auto-built
+- [x] rebuild flow: stop → recreate container → reconnect agent; preserves
+      /workspace + /state + /cache + /tools (verified: universal rebuild
+      added ffmpeg while markers survived)
+- [x] environment selector in the workspace form + rebuild button
 
-## Phase 12 — Tasks/Trace
+## Phase 12 — Tasks/Trace (complete)
 
-- [ ] tasks board, trace/observability view
+- [x] tasks: CRUD + status transitions + session assignment, Tasks tab
+- [x] trace: control-plane recorder (user prompts, assistant runs, tool
+      durations) + live Trace timeline tab
 
 ## Phase 13 — Plugin SDK
 

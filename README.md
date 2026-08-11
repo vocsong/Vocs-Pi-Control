@@ -1,135 +1,69 @@
-# Vocs Pi Control
+# ◆ Vocs Pi Control
 
-**Local-first web control plane for the Pi coding agent.**
+**Run multiple Pi coding agents in isolated, rootless, sandboxed workspaces — right on your machine. Local-first, browser-based, zero cloud.**
 
-Vocs Pi Control is a secure operating environment for coding agents. It
-manages projects, isolated workspaces, Pi sessions, files, Git, terminals,
-processes, tasks and observability — with rootless Podman as the sandbox
-runtime and a deny-by-default host filesystem.
+> Your own AI coding control plane: every Pi session runs inside its own rootless-Podman container, sees **only the folder you explicitly add**, and never touches your SSH keys, cloud credentials, or the rest of your disk. Works on Windows, macOS, and Linux.
 
-> **Status: Phases 0–9 complete** (foundation, Podman runtime, workspace
-> agent, real Pi SDK, reconnect hardening, projects/workspaces/sessions UI,
-> files, git/worktrees, terminals/processes/ports, Pi management controls —
-> verified on Windows 11 + WSL). The authoritative specification is
-> [`docs/pi-control-implementation-plan.md`](docs/pi-control-implementation-plan.md).
-> Progress: [`TODO.md`](TODO.md).
-
-## Security model in one sentence
-
-> Pi Control owns rootless Podman; every explicitly added workspace owns one
-> isolated container; multiple Pi sessions may collaborate inside that
-> workspace; independent file work gets a new Git worktree/workspace/container;
-> agents never receive host-wide filesystem or container-runtime control.
-
-## Quick start
+## Setup — one command
 
 ```bash
-pnpm install
-pnpm dev
+git clone https://github.com/vocsong/Vocs-Pi-Control.git
+cd Vocs-Pi-Control
+npm run quickstart
 ```
 
-Then open http://127.0.0.1:5173
+That's it. The script installs dependencies, sets up Podman (asks first), builds the sandbox image, starts the control server + web UI, and opens your browser. Add a project folder, create a session, and start prompting a **real Pi agent inside a rootless container**.
 
-- Sessions created in the UI use the **MockPiDriver** (no provider calls —
-  useful for UI development and tests).
-- **Real Pi sessions** live inside a workspace sandbox (see below).
+> Prerequisites: [Node.js ≥ 22](https://nodejs.org/). Everything else is handled.
 
-### Full flow: real Pi inside a sandbox
+---
 
-```bash
-# 1. Prepare the sandbox runtime (first run creates/starts the WSL/VM machine)
-curl -X POST http://127.0.0.1:5174/api/sandbox/prepare
-curl -X POST http://127.0.0.1:5174/api/sandbox/self-test      # isolation proof
+## Features
 
-# 2. Add a project + workspace (folder → rootless container)
-curl -X POST http://127.0.0.1:5174/api/projects \
-  -H 'content-type: application/json' -d '{"name":"my-app","hostRootPath":"C:/Projects/my-app"}'
-curl -X POST http://127.0.0.1:5174/api/projects/<id>/workspaces \
-  -H 'content-type: application/json' -d '{"name":"main","hostPath":"C:/Projects/my-app"}'
-curl -X POST http://127.0.0.1:5174/api/workspaces/<id>/start
+### 🛡️ Secure by default — real isolation, not vibes
+- **Rootless Podman sandboxes** — every workspace is its own container; no privileged mode, no Docker/Podman socket, no host network, no host devices
+- **Deny-by-default filesystem** — agents see only the folders you explicitly add as workspaces; your home, SSH keys, and cloud credentials are never mounted
+- **One-click security self-test** — proves in seconds that host home and sockets are absent and only `/workspace` is writable
+- **Local-first privacy** — the control plane binds to `127.0.0.1`, your prompts and code never leave your machine except to the LLM provider you choose
 
-# 3. Create a REAL Pi session inside the container (pi SDK runs in the sandbox)
-curl -X POST http://127.0.0.1:5174/api/workspaces/<id>/sessions \
-  -H 'content-type: application/json' -d '{"title":"My session"}'
+### 🤖 Real Pi agents, fully managed
+- **Multiple concurrent sessions per workspace** — Lead, Tester, Reviewer: all collaborating on the same shared files, `node_modules`, `.venv`, and Git state
+- **Native Pi session persistence** — sessions survive container rebuilds and can be resumed exactly where they left off
+- **Live streaming** — thinking, tool calls, and answers stream to your browser in real time
+- **Model & thinking controls** — pick any provider model from Pi's live catalog, tune thinking levels, compact context
 
-# 4. Prompt it (streaming arrives over the WebSocket protocol)
-curl -X POST http://127.0.0.1:5174/api/sessions/<sessionId>/prompt \
-  -H 'content-type: application/json' -d '{"text":"List /workspace"}'
-```
+### 💻 A complete agent IDE
+- **Files** — full explorer + CodeMirror editor with create/rename/delete, image & Markdown previews
+- **Git** — status, diff, stage/unstage, commit, branches, history
+- **Git worktrees** — independent agents automatically get their own worktree, workspace, **and container**
+- **Terminals** — persistent PTY tabs that survive browser refreshes
+- **App runner + port exposure** — dev servers inside the sandbox open on your localhost with one click
+- **Tasks** — track and assign work across sessions
+- **Trace** — per-session observability timeline with tool timings
 
-Provider credentials: set the relevant API keys in the control-server
-environment (`ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, `OPENAI_API_KEY`, …).
-The server forwards them to the workspace agent at connect time (V1
-boundary — see [`docs/security/threat-model.md`](docs/security/threat-model.md)).
+### ⚡ Power user experience
+- Command palette (`Ctrl+K`), quick file open (`Ctrl+P`), transcript search (`Ctrl+F`)
+- Multiple sessions side by side with editing leases — no more clobbered prompts
+- Reconnect hardening — refresh your browser mid-run and nothing is lost
+- PWA baseline — installable, offline-capable shell
+- Environment profiles — Node, Node+Python, or Universal images with one-click rebuild that preserves your workspace and caches
 
-## Monorepo layout
+---
 
-```text
-apps/
-  server/            control server: Fastify, WebSocket hub, SQLite,
-                     sandbox manager, agent connections, session routing
-  web/               React/Vite frontend (browser talks only to the control server)
-  workspace-agent/   long-lived agent that runs INSIDE each sandbox:
-                     Pi sessions (EmbeddedPiDriver), processes, exec
-packages/
-  protocol/          realtime protocol: EventEnvelope, ClientCommand,
-                     agent protocol, typed payloads
-  pi-driver/         PiSessionDriver interface + MockPiDriver + EmbeddedPiDriver
-  sandbox/           SandboxRuntime interface + MockSandboxRuntime +
-                     RootlessPodmanRuntime (+ path translation, arg builder,
-                     security self-test)
-  database/          Drizzle schema + SQLite migrations (control-plane metadata only)
-  shared/            id/time utilities
-  test-utils/        shared test helpers
-images/base/         base image: Node 22, Git, pi SDK (pinned), workspace agent
-docs/
-  pi-control-implementation-plan.md   the authoritative plan (v1.0)
-  api/               REST + WebSocket protocol reference
-  architecture/      overview, sandbox, workspace-agent, sessions
-  security/          threat model, sandbox policy
-  adr/               0001–0010 architecture decision records
-  operations.md      build/run/verify workflow
-```
+## Documentation
 
-## Scripts
+- **[Implementation plan](docs/pi-control-implementation-plan.md)** — the full spec behind this project
+- **[Architecture](docs/architecture/overview.md)** — how the control plane, sandbox, and agent fit together
+- **[API reference](docs/api/README.md)** — REST + WebSocket protocol
+- **[Security](docs/security/threat-model.md)** — threat model and sandbox policy
+- **[Architecture decisions](docs/adr/)** — ADR-0001 through ADR-0010
+- **[Operations](docs/operations.md)** — build, run, troubleshoot
+- **[Roadmap](TODO.md)** — what's shipped and what's next
 
-| Command            | Purpose                                   |
-| ------------------ | ----------------------------------------- |
-| `pnpm dev`         | run server (5174) + web (5173) concurrently |
-| `pnpm image:base`  | bundle workspace agent + build base image |
-| `pnpm typecheck`   | strict TS across all packages             |
-| `pnpm test`        | vitest unit tests                         |
-| `pnpm build`       | build all packages/apps                   |
-| `pnpm db:generate` | generate SQLite migration from Drizzle schema |
+## Status
 
-## Configuration (server)
+Phases 0–12 complete: foundation → rootless Podman runtime → workspace agent → real Pi SDK integration → reconnect hardening → projects/workspaces/sessions UI → files → git/worktrees → terminals/processes/ports → Pi management → power UX → environment profiles → tasks/trace. Verified on Windows 11 + WSL.
 
-| Env var                    | Default                          |
-| -------------------------- | -------------------------------- |
-| `PI_CONTROL_HOST`          | `127.0.0.1` (loopback only)      |
-| `PI_CONTROL_PORT`          | `5174`                           |
-| `PI_CONTROL_DATA_DIR`      | `~/.pi-control`                  |
-| `PI_CONTROL_DB_PATH`       | `<dataDir>/pi-control.db`        |
-| `PI_CONTROL_LOG_LEVEL`     | `info`                           |
-| `PI_CONTROL_RUNTIME`       | `auto` (`mock`\|`podman`\|`auto`) |
-| `PI_CONTROL_PODMAN_MACHINE`| `pi-control`                     |
-| `PI_CONTROL_BASE_IMAGE`    | `pi-control/base:local`          |
-| `PI_CONTROL_PI_DRIVER`     | `embedded` (`mock`\|`embedded`)  |
-| `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, … | forwarded to agents (V1) |
+## License
 
-## Roadmap
-
-Tracked in [TODO.md](TODO.md) against the plan's phases (0–17) and MVP
-definition (plan §55). Completed through Phase 9. Next: Phase 10 power UX
-(command palette, quick-open, PWA), Phase 11 environment profiles,
-Phase 12 tasks/trace.
-
-## Security notes
-
-- The server binds `127.0.0.1` only.
-- Sandboxing: rootless Podman, workspace-per-container, no runtime sockets,
-  no host mounts beyond the workspace, resource limits, loopback-only ports.
-  See [`docs/security/threat-model.md`](docs/security/threat-model.md) and the
-  self-test (`POST /api/sandbox/self-test`).
-- The mock driver provides **no isolation** — it exists to build plumbing.
-  `PI_CONTROL_RUNTIME=mock` is explicit only.
+[Apache-2.0](LICENSE)

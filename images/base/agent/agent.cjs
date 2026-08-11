@@ -4249,6 +4249,7 @@ var AGENT_COMMAND_TYPES = [
   "agent.file.mkdir",
   "agent.file.remove",
   "agent.file.rename",
+  "agent.file.search",
   "agent.git.status",
   "agent.git.diff",
   "agent.git.stage",
@@ -4299,6 +4300,8 @@ var EVENT_TYPES = {
   processStarted: "process.started",
   processOutput: "process.output",
   processExited: "process.exited",
+  taskCreated: "task.created",
+  taskUpdated: "task.updated",
   terminalCreated: "terminal.created",
   terminalOutput: "terminal.output",
   terminalClosed: "terminal.closed",
@@ -5065,6 +5068,42 @@ var FileService = class {
     } catch {
       return false;
     }
+  }
+  /**
+   * Filename search (quick-open): walks the tree, pruning node_modules,
+   * .git and hidden dirs, and matches the query against file names.
+   */
+  async search(query, maxResults = 50) {
+    const q = query.toLowerCase();
+    const matches = [];
+    const walk = async (dir, depth) => {
+      if (depth > 8 || matches.length >= maxResults) return;
+      let names;
+      try {
+        names = await import_node_fs2.default.promises.readdir(dir);
+      } catch {
+        return;
+      }
+      for (const name of names) {
+        if (matches.length >= maxResults) return;
+        if (name === "node_modules" || name === ".git" || name.startsWith(".")) continue;
+        const abs = import_node_path2.default.join(dir, name);
+        let stat;
+        try {
+          stat = await import_node_fs2.default.promises.lstat(abs);
+        } catch {
+          continue;
+        }
+        const rel = import_node_path2.default.relative(this.root, abs).split(import_node_path2.default.sep).join("/");
+        if (stat.isDirectory()) {
+          await walk(abs, depth + 1);
+        } else if (stat.isFile() && name.toLowerCase().includes(q)) {
+          matches.push(rel);
+        }
+      }
+    };
+    await walk(this.root, 0);
+    return matches.slice(0, maxResults);
   }
 };
 
@@ -12698,6 +12737,14 @@ async function startAgentServer(options) {
           await files.rename(request.from, request.to);
           socket.send(
             JSON.stringify({ type: "agent.file.ok", payload: { ok: true, path: request.to, commandId: command.id } })
+          );
+          return;
+        }
+        case "agent.file.search": {
+          const request = command.payload;
+          const matches = await files.search(request.query, request.maxResults);
+          socket.send(
+            JSON.stringify({ type: "agent.file.search", payload: { matches, commandId: command.id } })
           );
           return;
         }
