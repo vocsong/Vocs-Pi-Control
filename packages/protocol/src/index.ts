@@ -253,6 +253,45 @@ export interface SelfTestEventPayload {
 }
 
 /* ------------------------------------------------------------------ */
+/* Agent / process payloads (browser-facing)                           */
+/* ------------------------------------------------------------------ */
+
+export type AgentState = "connecting" | "connected" | "disconnected";
+
+export interface AgentStatePayload {
+  workspaceId: string;
+  state: AgentState;
+  agentVersion?: string;
+  detail?: string;
+}
+
+export interface ProcessInfo {
+  id: string;
+  workspaceId: string;
+  name: string;
+  command: string;
+  cwd: string;
+  status: "starting" | "running" | "exited" | "error";
+  pid?: number;
+  startedAt: string;
+  exitedAt?: string;
+  exitCode?: number;
+}
+
+export interface ProcessOutputPayload {
+  workspaceId: string;
+  processId: string;
+  stream: "stdout" | "stderr";
+  text: string;
+}
+
+export interface ProcessExitedPayload {
+  workspaceId: string;
+  processId: string;
+  exitCode: number;
+}
+
+/* ------------------------------------------------------------------ */
 /* Event types                                                         */
 /* ------------------------------------------------------------------ */
 
@@ -286,6 +325,12 @@ export const EVENT_TYPES = {
   sandboxPrepare: "sandbox.prepare",
   sandboxSelfTest: "sandbox.selftest",
 
+  agentState: "agent.state",
+  agentHealth: "agent.health",
+  processStarted: "process.started",
+  processOutput: "process.output",
+  processExited: "process.exited",
+
   commandAck: "command.ack",
   commandError: "command.error",
   commandDuplicate: "command.duplicate",
@@ -317,3 +362,5 @@ export function sessionEnvelope(
 ): EventEnvelopeInit {
   return { scope: "session", sessionId, type, payload };
 }
+
+export * from "./agent.js";

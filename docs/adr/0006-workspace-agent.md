@@ -25,4 +25,11 @@ manage, and it couples the control server to container internals (plan §11.2).
 
 - The control server stays thin; host-side code never touches Pi processes.
 - Browser disconnects don't disturb agent-managed processes (plan §18, §26).
+- Transport direction is server→agent: the workspace container publishes a
+  loopback-only forwarded port at creation; the agent listens inside and the
+  control server connects out to it. This works identically on Linux,
+  macOS and Windows/WSL machines. Inside the container the agent binds
+  `0.0.0.0` because published ports route to the container's network
+  interface rather than its loopback — this is not public exposure because
+  the host-side publish is loopback-only and token-authenticated.
 - Phase 2 must deliver the agent + protocol before Phase 3 real Pi work.

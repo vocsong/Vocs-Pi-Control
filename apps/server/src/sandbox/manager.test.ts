@@ -6,6 +6,7 @@ import { openDb, schema, type Db } from "@pi-control/database";
 import { MockSandboxRuntime } from "@pi-control/sandbox/mock";
 import { RealtimeHub } from "../realtime/hub.js";
 import { createLogger } from "../logger.js";
+import { AgentManager } from "../agents/agentManager.js";
 import { SandboxManager } from "./manager.js";
 
 function openTestDb(): Db {
@@ -28,14 +29,16 @@ function openTestDb(): Db {
 function makeManager(db: Db = openTestDb()) {
   const logger = createLogger("silent");
   const hub = new RealtimeHub(logger);
+  const agents = new AgentManager(hub, logger);
   const manager = new SandboxManager({
     db,
     runtime: new MockSandboxRuntime({ speedMs: 0 }),
     hub,
     logger,
+    agents,
     baseImage: "pi-control/base:local",
   });
-  return { db, hub, manager };
+  return { db, hub, agents, manager };
 }
 
 let scratch: string;

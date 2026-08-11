@@ -6,6 +6,34 @@ All notable changes to Vocs Pi Control are documented here. Format follows
 
 ## [Unreleased]
 
+### Added — Phase 2 (workspace agent)
+
+- `pi-control-workspace-agent` (apps/workspace-agent): long-lived agent
+  running inside each sandbox; WebSocket server authenticated with a random
+  per-sandbox token (Bearer, constant-time compare); heartbeat/health every
+  5s; exec with timeout/output cap; detached process supervision with
+  streaming output and bounded ring buffer; survives control-server
+  restarts and re-syncs its process list on reconnect
+- Agent protocol (`packages/protocol/agent.ts`): versioned commands and
+  events with request-id responses (`agent.ok`, commandId-carrying replies)
+- Transport: control server connects OUT to the agent via a loopback-only
+  forwarded port allocated per workspace (works across Linux, macOS and
+  Windows/WSL machines); inside the container the agent binds 0.0.0.0
+  (published ports route to the container interface, host side stays
+  loopback-only)
+- Control server: AgentClient (reconnect with backoff) + AgentManager
+  (per-workspace connections, bridging agent events to browser envelopes
+  `agent.state`, `agent.health`, `process.started/output/exited`)
+- Sandbox manager: per-workspace agent token + port allocation, env
+  injection, endpoint restore after restart
+- REST: `/api/workspaces/:id/agent`, `/exec`, `/processes` (list/spawn),
+  `/processes/:id/kill`
+- Base image: agent bundled (CJS — `ws` uses dynamic requires) and set as
+  the container ENTRYPOINT; `pnpm image:base` builds both
+- Verified live: agent connected through the forwarded port inside a
+  rootless container; spawned process survived a full control-server
+  restart; reconnect re-synced state; kill terminated the process group
+
 ### Added — Phase 1 (Podman runtime bootstrap)
 
 - `RootlessPodmanRuntime`: detect/prepare/create/start/stop/remove, exec,

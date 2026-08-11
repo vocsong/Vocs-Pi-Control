@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AppFastify } from "../types.js";
 import type { SandboxManager } from "../sandbox/manager.js";
+import type { AgentManager } from "../agents/agentManager.js";
 
 const createWorkspaceBody = z
   .object({
@@ -19,7 +20,25 @@ const createWorkspaceBody = z
   })
   .strict();
 
-export function registerWorkspaceRoutes(app: AppFastify, manager: SandboxManager): void {
+const execBody = z
+  .object({
+    command: z.array(z.string().min(1)).min(1).max(64),
+    cwd: z.string().min(1).max(4096).optional(),
+    timeoutMs: z.number().int().min(100).max(600_000).optional(),
+    maxOutputBytes: z.number().int().min(1024).max(4 * 1024 * 1024).optional(),
+  })
+  .strict();
+
+const spawnProcessBody = z
+  .object({
+    name: z.string().min(1).max(200).optional(),
+    command: z.array(z.string().min(1)).min(1).max(64),
+    cwd: z.string().min(1).max(4096).optional(),
+    env: z.record(z.string(), z.string()).optional(),
+  })
+  .strict();
+
+export function registerWorkspaceRoutes(app: AppFastify, manager: SandboxManager, agents: AgentManager): void {
   app.get("/api/workspaces", async () => {
     return { workspaces: manager.listWorkspaces() };
   });
@@ -67,6 +86,57 @@ export function registerWorkspaceRoutes(app: AppFastify, manager: SandboxManager
     const { workspaceId } = request.params as { workspaceId: string };
     try {
       await manager.removeWorkspace(workspaceId);
+      agents.disconnect(workspaceId);
+      return { ok: true };
+    } catch (error) {
+      return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  /* Agent + process supervision (Phase 2) */
+
+  app.get("/api/workspaces/:workspaceId/agent", async (request, reply) => {
+    const { workspaceId } = request.params as { workspaceId: string };
+    const status = agents.status(workspaceId);
+    if (!status) return reply.code(404).send({ error: "no_agent_connection" });
+    return { agent: status };
+  });
+
+  app.post("/api/workspaces/:workspaceId/exec", async (request, reply) => {
+    const { workspaceId } = request.params as { workspaceId: string };
+    const body = execBody.parse(request.body);
+    try {
+      const result = await agents.exec(workspaceId, body);
+      return { result };
+    } catch (error) {
+      return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  app.get("/api/workspaces/:workspaceId/processes", async (request, reply) => {
+    const { workspaceId } = request.params as { workspaceId: string };
+    try {
+      return { processes: await agents.listProcesses(workspaceId) };
+    } catch (error) {
+      return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  app.post("/api/workspaces/:workspaceId/processes", async (request, reply) => {
+    const { workspaceId } = request.params as { workspaceId: string };
+    const body = spawnProcessBody.parse(request.body);
+    try {
+      const process = await agents.spawnProcess(workspaceId, body);
+      return reply.code(201).send({ process });
+    } catch (error) {
+      return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  app.post("/api/workspaces/:workspaceId/processes/:processId/kill", async (request, reply) => {
+    const { workspaceId, processId } = request.params as { workspaceId: string; processId: string };
+    try {
+      await agents.killProcess(workspaceId, processId);
       return { ok: true };
     } catch (error) {
       return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });

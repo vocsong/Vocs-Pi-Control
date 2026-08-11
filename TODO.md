@@ -53,12 +53,29 @@ the server with fake session streaming — **done locally, needs CI wiring**.
       writes bidirectional; host home + sockets absent
 - [ ] macOS/Ubuntu matrix verification
 
-## Phase 2 — Workspace Agent
+## Phase 2 — Workspace Agent (complete)
 
-- [ ] workspace-agent process/service skeleton → real implementation
-- [ ] authenticated control-server connection (per-sandbox secret)
-- [ ] health/heartbeat, reconnect
-- [ ] exec abstraction; process/terminal supervision foundation
+- [x] `pi-control-workspace-agent` process/service (apps/workspace-agent):
+      WebSocket server with per-sandbox token auth (Bearer, constant-time)
+- [x] authenticated control-server connection — server connects OUT to the
+      agent's loopback-forwarded port (works on Linux/WSL/macOS machines)
+- [x] health/heartbeat (5s: memory, cpu%, process count) + reconnect with
+      backoff and process-list re-sync on ready
+- [x] exec abstraction (run command, stream output, timeout, output cap)
+- [x] process supervision: spawn (detached process group), kill, list,
+      output streaming with bounded ring buffer
+- [x] control server: AgentClient + AgentManager (per-workspace connection,
+      event bridging to browser envelopes: agent.state/health,
+      process.started/output/exited)
+- [x] per-sandbox secret + loopback-forwarded agent port at workspace
+      creation; persisted in sandbox configJson; restore after restart
+- [x] REST: exec, processes (list/spawn/kill), agent status
+- [x] base image runs the agent as ENTRYPOINT (CJS bundle — ws needs CJS)
+- [x] verified live: agent connected inside rootless container; spawned
+      process survived a control-server restart; re-sync + kill work
+
+Acceptance: control server stop/reconnect without losing agent-managed
+processes — **verified on Windows 11 + WSL machine**.
 
 ## Phase 3 — Real Pi Integration
 

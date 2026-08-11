@@ -1,19 +1,39 @@
 /**
- * pi-control-workspace-agent (skeleton — Phase 2 target).
+ * pi-control-workspace-agent entrypoint.
  *
- * In production this long-lived service runs INSIDE each workspace sandbox
- * container (plan §11, ADR-0006). Responsibilities (Phase 2+):
- *   - authenticated connection to the control server (per-sandbox secret);
- *   - start/resume Pi sessions via the Pi driver;
- *   - PTY/terminal ownership and long-running process supervision;
- *   - health/resource reporting and reconnect semantics.
- *
- * Phase 0 ships only the package skeleton so the monorepo layout is complete.
+ * Runs INSIDE each workspace container (and on the host for development and
+ * tests). Owns workspace processes and (Phase 3+) Pi sessions; survives
+ * browser and control-server disconnects (plan §11, ADR-0006).
  */
 
-import { newId } from "@pi-control/shared";
+import { loadAgentConfig } from "./config.js";
+import { startAgentServer } from "./agentServer.js";
 
-const agentId = newId("wa");
+async function main(): Promise<void> {
+  const config = loadAgentConfig();
+  const logger = (message: string, meta: Record<string, unknown> = {}) => {
+    // Structured-ish logging; the container logs are collected via `podman logs`.
+    const line = { time: new Date().toISOString(), message, ...meta };
+    process.stdout.write(JSON.stringify(line) + "\n");
+  };
 
-// eslint-disable-next-line no-console
-console.log(`[workspace-agent] ${agentId} skeleton online (Phase 0 — full agent lands in Phase 2)`);
+  if (!config.token) {
+    logger(
+      "PI_CONTROL_AGENT_TOKEN is not set — the control server cannot authenticate to this agent. " +
+        "Staying alive but idle (this is normal for ad-hoc container use).",
+    );
+    setInterval(() => undefined, 60_000);
+    return;
+  }
+
+  const handle = await startAgentServer({ config, logger });
+
+  const shutdown = (signal: string) => {
+    logger("shutting down", { signal });
+    void handle.close().then(() => process.exit(0));
+  };
+  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+}
+
+void main();

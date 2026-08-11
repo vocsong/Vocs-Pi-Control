@@ -6,15 +6,22 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "bundle": "node scripts/bundle.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@pi-control/protocol": "workspace:*",
-    "@pi-control/shared": "workspace:*"
+    "@pi-control/shared": "workspace:*",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@pi-control/test-utils": "workspace:*",
     "@types/node": "^22.15.0",
+    "@types/ws": "^8.18.0",
+    "esbuild": "^0.25.0",
     "tsx": "^4.19.0",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.3"
   }
 }

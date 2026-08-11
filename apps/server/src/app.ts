@@ -5,6 +5,7 @@ import type { Logger } from "./logger.js";
 import type { RealtimeHub } from "./realtime/hub.js";
 import type { SessionManager } from "./sessions/manager.js";
 import type { SandboxManager } from "./sandbox/manager.js";
+import type { AgentManager } from "./agents/agentManager.js";
 import { registerRealtime } from "./realtime/ws.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerSessionRoutes } from "./routes/sessions.js";
@@ -19,6 +20,7 @@ export interface AppDeps {
   hub: RealtimeHub;
   sessions: SessionManager;
   sandbox: SandboxManager;
+  agents: AgentManager;
   runtimeName: string;
 }
 
@@ -38,7 +40,7 @@ export async function buildApp(deps: AppDeps): Promise<AppFastify> {
   registerHealthRoutes(app, deps);
   registerSessionRoutes(app, deps.sessions);
   registerProjectRoutes(app, deps.sandbox);
-  registerWorkspaceRoutes(app, deps.sandbox);
+  registerWorkspaceRoutes(app, deps.sandbox, deps.agents);
   registerSandboxRoutes(app, deps.sandbox);
   registerRealtime(app, deps);
 

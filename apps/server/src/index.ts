@@ -14,6 +14,7 @@ import { RealtimeHub } from "./realtime/hub.js";
 import { SessionManager } from "./sessions/manager.js";
 import { SandboxManager } from "./sandbox/manager.js";
 import { selectRuntime } from "./sandbox/runtimeFactory.js";
+import { AgentManager } from "./agents/agentManager.js";
 import { buildApp } from "./app.js";
 
 async function main(): Promise<void> {
@@ -30,6 +31,7 @@ async function main(): Promise<void> {
 
   const hub = new RealtimeHub(logger);
   const sessions = new SessionManager(db, hub, () => new MockPiDriver({ speedMs: 60 }), logger);
+  const agents = new AgentManager(hub, logger);
 
   const { runtime, detection, reason } = await selectRuntime(logger, process.env);
   logger.info({ runtime: runtime.name, reason, messages: detection.messages }, "sandbox runtime selected");
@@ -39,12 +41,14 @@ async function main(): Promise<void> {
     runtime,
     hub,
     logger,
+    agents,
     baseImage: process.env.PI_CONTROL_BASE_IMAGE ?? "pi-control/base:local",
   });
   sandbox.restoreSandboxes();
+  sandbox.restoreAgents();
   await sandbox.refreshDetection();
 
-  const app = await buildApp({ logger, db, hub, sessions, sandbox, runtimeName: runtime.name });
+  const app = await buildApp({ logger, db, hub, sessions, sandbox, agents, runtimeName: runtime.name });
 
   try {
     await app.listen({ host: config.host, port: config.port });
@@ -57,6 +61,7 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string): Promise<void> => {
     logger.info({ signal }, "shutting down");
     try {
+      agents.shutdown();
       await app.close();
     } finally {
       process.exit(0);

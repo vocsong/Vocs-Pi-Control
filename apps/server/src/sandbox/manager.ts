@@ -8,6 +8,8 @@
  */
 
 import fs from "node:fs";
+import net from "node:net";
+import crypto from "node:crypto";
 import { schema, type Db } from "@pi-control/database";
 import { desc, eq } from "drizzle-orm";
 import {
@@ -28,6 +30,7 @@ import {
 import { newId, nowIso } from "@pi-control/shared";
 import type { RealtimeHub } from "../realtime/hub.js";
 import type { Logger } from "../logger.js";
+import type { AgentManager, AgentEndpoint } from "../agents/agentManager.js";
 
 export interface SandboxManagerOptions {
   db: Db;
@@ -36,6 +39,8 @@ export interface SandboxManagerOptions {
   logger: Logger;
   /** Default image for workspace containers. */
   baseImage: string;
+  /** Agent connections for running workspaces. */
+  agents: AgentManager;
 }
 
 export interface CreateProjectInput {
@@ -52,6 +57,22 @@ export interface CreateWorkspaceInput {
 }
 
 const CONTAINER_WORKSPACE_PATH = "/workspace";
+
+/** Port the workspace agent listens on INSIDE the container. */
+export const AGENT_CONTAINER_PORT = 4175;
+
+/** Allocate a free loopback port for the agent's host-side forward. */
+export async function allocateAgentHostPort(): Promise<number> {
+  return new Promise<number>((resolve, reject) => {
+    const server = net.createServer();
+    server.unref();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address() as net.AddressInfo;
+      server.close(() => resolve(address.port));
+    });
+  });
+}
 
 const VOLUME_SUFFIXES = ["home", "state", "cache", "tools"] as const;
 
@@ -179,6 +200,10 @@ export class SandboxManager {
     const capacity = await this.options.runtime.capacity();
     const defaults = defaultResources(capacity);
 
+    // Per-sandbox agent secret + loopback-forwarded agent port (ADR-0006).
+    const agentToken = crypto.randomBytes(32).toString("hex");
+    const agentHostPort = await allocateAgentHostPort();
+
     const spec: CreateWorkspaceSandboxSpec = {
       workspaceId,
       containerName,
@@ -195,9 +220,14 @@ export class SandboxManager {
         pidLimit: input.resources?.pidLimit ?? defaults.pidLimit,
       },
       securityProfile: input.securityProfile ?? "standard",
+      ports: [{ hostPort: agentHostPort, containerPort: AGENT_CONTAINER_PORT }],
       environment: {
         PI_CODING_AGENT_DIR: "/state/pi-agent",
         PI_CODING_AGENT_SESSION_DIR: "/state/pi-sessions",
+        PI_CONTROL_AGENT_TOKEN: agentToken,
+        PI_CONTROL_AGENT_PORT: String(AGENT_CONTAINER_PORT),
+        PI_CONTROL_AGENT_HOST: "0.0.0.0",
+        PI_CONTROL_WORKSPACE_ID: workspaceId,
       },
     };
 
@@ -261,6 +291,7 @@ export class SandboxManager {
       await this.options.runtime.startWorkspace(sandbox.id);
       this.setWorkspaceState(workspaceId, "running");
       this.updateSandboxState(sandbox.id, "running");
+      this.connectAgent(workspaceId, sandbox.id);
     } catch (error) {
       this.setWorkspaceState(workspaceId, "error");
       this.updateSandboxState(sandbox.id, "error");
@@ -272,6 +303,7 @@ export class SandboxManager {
 
   async stopWorkspace(workspaceId: string): Promise<WorkspaceInfo> {
     const sandbox = this.requireSandbox(workspaceId);
+    this.options.agents.disconnect(workspaceId);
     this.setWorkspaceState(workspaceId, "stopping");
     try {
       await this.options.runtime.stopWorkspace(sandbox.id);
@@ -319,6 +351,39 @@ export class SandboxManager {
     const rows = this.options.db.select().from(schema.sandboxes).where(eq(schema.sandboxes.state, "running")).all();
     for (const row of rows) {
       this.options.runtime.registerSandbox(row.id, row.containerName);
+    }
+  }
+
+  /**
+   * Agent endpoint for a workspace, parsed from its sandbox record
+   * (the token and forwarded port are stored there at creation).
+   */
+  agentEndpoint(workspaceId: string): AgentEndpoint | null {
+    const sandbox = this.options.db
+      .select()
+      .from(schema.sandboxes)
+      .where(eq(schema.sandboxes.workspaceId, workspaceId))
+      .get();
+    if (!sandbox) return null;
+    try {
+      const config = JSON.parse(sandbox.configJson) as {
+        ports?: Array<{ hostPort: number }>;
+        environment?: Record<string, string>;
+      };
+      const hostPort = config.ports?.[0]?.hostPort;
+      const token = config.environment?.PI_CONTROL_AGENT_TOKEN;
+      if (!hostPort || !token) return null;
+      return { url: `ws://127.0.0.1:${hostPort}`, token };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Reconnect agents for running workspaces after a server restart. */
+  restoreAgents(): void {
+    const rows = this.options.db.select().from(schema.sandboxes).where(eq(schema.sandboxes.state, "running")).all();
+    for (const row of rows) {
+      this.connectAgent(row.workspaceId, row.id);
     }
   }
 
@@ -371,6 +436,15 @@ export class SandboxManager {
       type: EVENT_TYPES.sandboxStatus,
       payload: this.statusPayload(detection),
     });
+  }
+
+  private connectAgent(workspaceId: string, _sandboxId: string): void {
+    const endpoint = this.agentEndpoint(workspaceId);
+    if (!endpoint) {
+      this.options.logger.warn({ workspaceId }, "workspace has no agent endpoint; skipping agent connection");
+      return;
+    }
+    this.options.agents.connect(workspaceId, endpoint);
   }
 
   private toWorkspaceInfo(

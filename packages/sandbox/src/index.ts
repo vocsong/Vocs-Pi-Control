@@ -68,6 +68,8 @@ export interface CreateWorkspaceSandboxSpec {
   securityProfile: "standard" | "restricted" | "trusted";
   /** Extra host mounts — must be explicitly granted; empty by default. */
   extraMounts?: BindMountSpec[];
+  /** Explicit loopback-only port forwards (agent endpoint, dev servers). */
+  ports?: { hostPort: number; containerPort: number }[];
   environment?: Record<string, string>;
 }
 

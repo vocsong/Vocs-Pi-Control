@@ -32,6 +32,10 @@ ENV PATH="/workspace/node_modules/.bin:/workspace/.venv/bin:/tools/bin:/tools/np
 
 WORKDIR /workspace
 
-# Phase 2: COPY the pi-control-workspace-agent into the image and define its
-# entrypoint here.
-CMD ["sleep", "infinity"]
+# Phase 2: the workspace agent is the container entrypoint. It authenticates
+# to the control server with PI_CONTROL_AGENT_TOKEN and owns processes and
+# (Phase 3) Pi sessions. Without a token it stays idle (ad-hoc use).
+COPY agent/agent.cjs /usr/local/lib/pi-control-workspace-agent.cjs
+
+ENTRYPOINT ["node", "/usr/local/lib/pi-control-workspace-agent.cjs"]
+CMD []
