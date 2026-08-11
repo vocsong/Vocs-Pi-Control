@@ -228,6 +228,11 @@ export class AgentManager {
     await this.require(workspaceId).request("agent.file.rename", { from, to }, 15_000);
   }
 
+  async searchFiles(workspaceId: string, query: string, maxResults = 50) {
+    const event = await this.require(workspaceId).request("agent.file.search", { query, maxResults }, 30_000);
+    return (event.payload as { matches: string[] }).matches;
+  }
+
   async gitStatus(workspaceId: string) {
     const event = await this.require(workspaceId).request("agent.git.status", {}, 15_000);
     return event.payload;

@@ -131,6 +131,18 @@ export function FilesView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeWorkspaceId]);
 
+  // Quick-open target (command palette → Files tab).
+  const requestedFile = usePiControl((s) => s.requestedFile);
+  const setRequestedFile = usePiControl((s) => s.setRequestedFile);
+  useEffect(() => {
+    if (!requestedFile || !activeWorkspaceId) return;
+    const parts = requestedFile.split("/");
+    const name = parts.pop() ?? requestedFile;
+    void openFile({ name, path: requestedFile, type: "file", size: 0, mtimeMs: 0 });
+    setRequestedFile(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedFile, activeWorkspaceId]);
+
   const openFile = async (entry: TreeNode) => {
     if (!activeWorkspaceId) return;
     try {

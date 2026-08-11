@@ -44,6 +44,7 @@ export const AGENT_COMMAND_TYPES = [
   "agent.file.mkdir",
   "agent.file.remove",
   "agent.file.rename",
+  "agent.file.search",
   "agent.git.status",
   "agent.git.diff",
   "agent.git.stage",
@@ -192,6 +193,16 @@ export interface AgentFileOkPayload {
   ok: true;
   path: string;
   bytes?: number;
+  commandId?: string;
+}
+
+export interface AgentFileSearchRequest {
+  query: string;
+  maxResults?: number;
+}
+
+export interface AgentFileSearchPayload {
+  matches: string[];
   commandId?: string;
 }
 
@@ -349,6 +360,7 @@ export const AGENT_EVENT_TYPES = [
   "agent.file.list",
   "agent.file.read",
   "agent.file.ok",
+  "agent.file.search",
   "agent.git.status",
   "agent.git.diff",
   "agent.git.commit",

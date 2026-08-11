@@ -1,0 +1,17 @@
+{
+  "name": "Vocs Pi Control",
+  "short_name": "Pi Control",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f1115",
+  "theme_color": "#0f1115",
+  "description": "Local-first web control plane for the Pi coding agent",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230f1115'/%3E%3Ctext x='16' y='22' font-size='18' text-anchor='middle' fill='%234f8cff'%3E%E2%97%86%3C/text%3E%3C/svg%3E",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

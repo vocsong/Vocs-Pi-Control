@@ -87,6 +87,8 @@ export interface ClientCommand {
 export const CLIENT_COMMAND_TYPES = [
   "session.create",
   "session.prompt",
+  "session.steer",
+  "session.followUp",
   "session.abort",
   "session.subscribe",
   "session.unsubscribe",

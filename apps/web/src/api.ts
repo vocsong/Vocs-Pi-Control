@@ -80,6 +80,10 @@ export const api = {
       body: JSON.stringify({ from, to }),
     }),
 
+  searchFiles: (workspaceId: string, query: string, max = 30) =>
+    json<{ matches: string[] }>(
+      `/api/workspaces/${workspaceId}/file/search?q=${encodeURIComponent(query)}&max=${max}`,
+    ),
   gitStatus: (workspaceId: string) => json<unknown>(`/api/workspaces/${workspaceId}/git/status`),
 
   gitDiff: (workspaceId: string, staged = false) =>

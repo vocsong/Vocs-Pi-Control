@@ -122,4 +122,41 @@ export class FileService {
       return false;
     }
   }
+
+  /**
+   * Filename search (quick-open): walks the tree, pruning node_modules,
+   * .git and hidden dirs, and matches the query against file names.
+   */
+  async search(query: string, maxResults = 50): Promise<string[]> {
+    const q = query.toLowerCase();
+    const matches: string[] = [];
+    const walk = async (dir: string, depth: number): Promise<void> => {
+      if (depth > 8 || matches.length >= maxResults) return;
+      let names: string[];
+      try {
+        names = await fs.promises.readdir(dir);
+      } catch {
+        return;
+      }
+      for (const name of names) {
+        if (matches.length >= maxResults) return;
+        if (name === "node_modules" || name === ".git" || name.startsWith(".")) continue;
+        const abs = path.join(dir, name);
+        let stat: fs.Stats;
+        try {
+          stat = await fs.promises.lstat(abs);
+        } catch {
+          continue;
+        }
+        const rel = path.relative(this.root, abs).split(path.sep).join("/");
+        if (stat.isDirectory()) {
+          await walk(abs, depth + 1);
+        } else if (stat.isFile() && name.toLowerCase().includes(q)) {
+          matches.push(rel);
+        }
+      }
+    };
+    await walk(this.root, 0);
+    return matches.slice(0, maxResults);
+  }
 }

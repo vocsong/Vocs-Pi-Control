@@ -45,6 +45,16 @@ export function registerFileRoutes(app: AppFastify, agents: AgentManager): void 
     }
   });
 
+  app.get("/api/workspaces/:workspaceId/file/search", async (request, reply) => {
+    const { workspaceId } = request.params as { workspaceId: string };
+    const query = z.object({ q: z.string().min(1).max(200), max: z.coerce.number().int().min(1).max(200).optional() }).parse(request.query);
+    try {
+      return { matches: await agents.searchFiles(workspaceId, query.q, query.max) };
+    } catch (error) {
+      return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
   app.put("/api/workspaces/:workspaceId/file", async (request, reply) => {
     const { workspaceId } = request.params as { workspaceId: string };
     const body = writeBody.parse(request.body);

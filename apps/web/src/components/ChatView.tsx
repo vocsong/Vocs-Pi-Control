@@ -80,10 +80,42 @@ export function ChatView() {
   const [capabilities, setCapabilities] = useState<Record<string, unknown> | null>(null);
   const [showCaps, setShowCaps] = useState(false);
   const [controlError, setControlError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const session = activeSessionId ? sessions[activeSessionId] : undefined;
   const messages = activeSessionId ? (items[activeSessionId] ?? []) : [];
   const sessionUsage = activeSessionId ? usage[activeSessionId] : undefined;
+
+  // Transcript search (Ctrl+F): filter rendered messages.
+  const searchTerms = searchQuery.trim().toLowerCase();
+  const visibleMessages = searchTerms
+    ? messages.filter((m) => {
+        const text =
+          m.kind === "user"
+            ? m.content
+            : m.kind === "assistant"
+              ? m.text
+              : m.kind === "thinking"
+                ? m.text
+                : m.kind === "tool"
+                  ? JSON.stringify(m.input ?? "") + (m.output ?? "")
+                  : "";
+        return text.toLowerCase().includes(searchTerms);
+      })
+    : messages;
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const loadCapabilities = useCallback(async () => {
     if (!activeSessionId) return;
@@ -211,6 +243,18 @@ export function ChatView() {
           </span>
         )}
         {controlError && <span className="form-error">{controlError}</span>}
+        <input
+          ref={searchInputRef}
+          className="transcript-search"
+          placeholder="Search transcript (Ctrl+F)"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+        {searchTerms && (
+          <span className="session-header-meta">
+            {visibleMessages.length}/{messages.length} shown
+          </span>
+        )}
       </header>
       {showCaps && capabilities && (
         <div className="caps-popover">
@@ -225,10 +269,12 @@ export function ChatView() {
         </div>
       )}
       <div className="messages" ref={scrollRef}>
-        {messages.length === 0 ? (
-          <div className="empty-chat">Ask Pi something to get started.</div>
+        {visibleMessages.length === 0 ? (
+          <div className="empty-chat">
+            {searchTerms ? "No messages match the search." : "Ask Pi something to get started."}
+          </div>
         ) : (
-          messages.map((item, index) => <Message key={index} item={item} />)
+          visibleMessages.map((item, index) => <Message key={index} item={item} />)
         )}
       </div>
     </main>

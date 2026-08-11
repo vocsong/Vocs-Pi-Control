@@ -159,6 +159,22 @@ async function execute(command: ClientCommand, socket: SocketLike, clientId: str
       hub.ack(socket, command.id);
       return;
     }
+    case "session.steer": {
+      const payload = promptSchema.parse(command.payload);
+      if (workspaceSessions.owns(payload.sessionId)) {
+        await workspaceSessions.steer(payload.sessionId, payload.text);
+      }
+      hub.ack(socket, command.id);
+      return;
+    }
+    case "session.followUp": {
+      const payload = promptSchema.parse(command.payload);
+      if (workspaceSessions.owns(payload.sessionId)) {
+        await workspaceSessions.followUp(payload.sessionId, payload.text);
+      }
+      hub.ack(socket, command.id);
+      return;
+    }
     case "session.abort": {
       const payload = sessionIdSchema.parse(command.payload);
       if (workspaceSessions.owns(payload.sessionId)) {

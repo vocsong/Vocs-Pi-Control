@@ -66,6 +66,8 @@ interface PiControlState {
   sandbox: SandboxStatusInfo | null;
   sandboxBusy: boolean;
   selfTest: SelfTestCheckInfo[] | null;
+  /** Quick-open target: a workspace-relative path to open in the Files tab. */
+  requestedFile: string | null;
 
   setConnection(connection: PiControlState["connection"]): void;
   setActive(sessionId: string | null): void;
@@ -80,6 +82,7 @@ interface PiControlState {
   removeWorkspace(workspaceId: string): Promise<void>;
   prepareSandbox(): Promise<void>;
   runSelfTest(): Promise<void>;
+  setRequestedFile(path: string | null): void;
   apply(envelope: EventEnvelope): void;
 }
 
@@ -102,6 +105,7 @@ export const usePiControl = create<PiControlState>((set, get) => ({
   sandbox: null,
   sandboxBusy: false,
   selfTest: null,
+  requestedFile: null,
 
   setConnection: (connection) => set({ connection }),
   setActive: (activeSessionId) => set({ activeSessionId }),
@@ -200,6 +204,8 @@ export const usePiControl = create<PiControlState>((set, get) => ({
       throw error;
     }
   },
+
+  setRequestedFile: (requestedFile) => set({ requestedFile }),
 
   apply: (envelope) => {
     const state = get();

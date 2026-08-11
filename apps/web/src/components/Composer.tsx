@@ -32,13 +32,17 @@ export function Composer() {
     }
   };
 
-  const send = async () => {
+  const send = async (followUp = false) => {
     const trimmed = text.trim();
     if (!trimmed || !activeSessionId) return;
     setBusy(true);
     setText("");
     try {
-      await realtime.sendCommand("session.prompt", { sessionId: activeSessionId, text: trimmed });
+      if (followUp) {
+        await realtime.sendCommand("session.followUp", { sessionId: activeSessionId, text: trimmed });
+      } else {
+        await realtime.sendCommand("session.prompt", { sessionId: activeSessionId, text: trimmed });
+      }
     } catch (error) {
       console.error("prompt failed", error);
     } finally {
@@ -69,14 +73,18 @@ export function Composer() {
       <textarea
         ref={textareaRef}
         value={text}
-        placeholder="Ask Pi…  (Enter to send, Shift+Enter for newline)"
+        placeholder="Ask Pi…  (Enter to send, Shift+Enter newline, Alt+Enter queue)"
         rows={2}
         disabled={leaseHeldByOther}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
+          if (e.key === "Enter" && !e.shiftKey && !e.altKey) {
             e.preventDefault();
-            void send();
+            void send(false);
+          }
+          if (e.key === "Enter" && e.altKey) {
+            e.preventDefault();
+            void send(true);
           }
           if (e.key === "Escape") {
             void abort();

@@ -357,6 +357,14 @@ export async function startAgentServer(options: AgentServerOptions): Promise<Age
           );
           return;
         }
+        case "agent.file.search": {
+          const request = command.payload as { query: string; maxResults?: number };
+          const matches = await files.search(request.query, request.maxResults);
+          socket.send(
+            JSON.stringify({ type: "agent.file.search", payload: { matches, commandId: command.id } } satisfies AgentEvent),
+          );
+          return;
+        }
         case "agent.git.status": {
           const result = await git.status();
           socket.send(JSON.stringify({ type: "agent.git.status", payload: { ...result, commandId: command.id } } satisfies AgentEvent));
