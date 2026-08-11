@@ -7,8 +7,10 @@ manages projects, isolated workspaces, Pi sessions, files, Git, terminals,
 processes, tasks and observability — with rootless Podman as the sandbox
 runtime and a deny-by-default host filesystem.
 
-> **Status: Phase 3 complete (real Pi SDK running inside rootless sandboxes,
-> verified on Windows 11 + WSL).** The authoritative specification is
+> **Status: Phases 0–9 complete** (foundation, Podman runtime, workspace
+> agent, real Pi SDK, reconnect hardening, projects/workspaces/sessions UI,
+> files, git/worktrees, terminals/processes/ports, Pi management controls —
+> verified on Windows 11 + WSL). The authoritative specification is
 > [`docs/pi-control-implementation-plan.md`](docs/pi-control-implementation-plan.md).
 > Progress: [`TODO.md`](TODO.md).
 
@@ -118,9 +120,9 @@ docs/
 ## Roadmap
 
 Tracked in [TODO.md](TODO.md) against the plan's phases (0–17) and MVP
-definition (plan §55). Completed: Phase 0 foundation, Phase 1 Podman runtime,
-Phase 2 workspace agent, Phase 3 real Pi integration. Next: Phase 4 reconnect
-hardening, Phase 5 projects/workspaces/sessions UI.
+definition (plan §55). Completed through Phase 9. Next: Phase 10 power UX
+(command palette, quick-open, PWA), Phase 11 environment profiles,
+Phase 12 tasks/trace.
 
 ## Security notes
 

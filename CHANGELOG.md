@@ -6,6 +6,22 @@ All notable changes to Vocs Pi Control are documented here. Format follows
 
 ## [Unreleased]
 
+### Added — Phases 5–9 (hierarchy UI, files, git, terminals, Pi management)
+
+- Phase 5: projects/workspaces/sessions UI — sidebar tree with onboarding
+  forms, start/stop/remove, per-workspace Pi sessions, sandbox panel
+- Phase 6: file service with defense-in-depth containment (lexical +
+  realpath, symlink-aware) + Files tab (CodeMirror, previews, CRUD)
+- Phase 7: controlled Git service (status/diff/stage/unstage/commit/
+  branches/log), worktree → new workspace/container (Invariant D), Git tab
+- Phase 8: terminal service (node-pty in the image, pipe fallback on host),
+  xterm.js terminal tab, processes/app-runner tab, port discovery with
+  loopback-only dev-port range exposure
+- Phase 9: Pi management — model picker from the real provider catalog,
+  thinking levels, compaction, capability visibility (tools/skills/
+  extensions/prompts)
+- Verified live through real containers on Windows 11 + WSL machine
+
 ### Added — Phase 4 (reconnect hardening)
 
 - Authoritative snapshots: when bounded replay cannot satisfy a reconnect

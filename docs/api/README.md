@@ -44,6 +44,41 @@ commands (plan §25, §28). Base URL: `http://127.0.0.1:5174` (loopback only).
 | GET | `/api/workspaces/:workspaceId/processes` | supervised processes |
 | POST | `/api/workspaces/:workspaceId/processes` | `{name?, command, cwd?, env?}` — spawn detached process |
 | POST | `/api/workspaces/:workspaceId/processes/:processId/kill` | terminate process group |
+| GET | `/api/workspaces/:workspaceId/ports` | listening ports mapped to host loopback URLs (dev range 43100–43119) |
+
+### Files (Phase 6)
+
+Paths are workspace-relative; containment is enforced agent-side.
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/workspaces/:id/files?path=` | directory entries |
+| GET | `/api/workspaces/:id/file?path=` | file content (utf8/base64, truncated) |
+| PUT | `/api/workspaces/:id/file` | `{path, content, encoding?}` |
+| POST | `/api/workspaces/:id/file/mkdir` / `remove` / `rename` | filesystem ops |
+
+### Git (Phase 7)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/workspaces/:id/git/status` | branch, ahead/behind, changes |
+| GET | `/api/workspaces/:id/git/diff?staged=1` | unified diff |
+| POST | `/api/workspaces/:id/git/stage` / `unstage` | `{paths: string[]}` |
+| POST | `/api/workspaces/:id/git/commit` | `{message}` → hash |
+| GET | `/api/workspaces/:id/git/branches` | branch list + current |
+| POST | `/api/workspaces/:id/git/branches` | `{name, from?}` create + checkout |
+| GET | `/api/workspaces/:id/git/log` | recent commits |
+| POST | `/api/projects/:projectId/worktrees` | `{name, branch?}` — creates worktree + NEW workspace/container |
+
+### Terminals (Phase 8)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/workspaces/:id/terminals` | open terminals (+ output buffer for replay) |
+| POST | `/api/workspaces/:id/terminals` | open terminal |
+| POST | `.../terminals/:terminalId/input` \| `resize` \| `close` | terminal control |
+
+Live input/output also flows over the WebSocket (`terminal.open/input/resize/close` commands, `terminal.output/closed` events).
 
 ### Sessions
 
@@ -60,6 +95,17 @@ ownership automatically.
 | GET | `/api/sessions/:sessionId` | session info |
 | POST | `/api/sessions/:sessionId/prompt` | `{text}` |
 | POST | `/api/sessions/:sessionId/abort` | abort current run |
+| DELETE | `/api/sessions/:sessionId` | dispose + delete |
+
+### Pi management (Phase 9)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/sessions/:id/capabilities` | model, thinking, tools, skills, extensions, prompts |
+| GET | `/api/workspaces/:id/models` | provider model catalog (auth-filtered) |
+| POST | `/api/sessions/:id/model` | `{model: "provider/id"}` |
+| POST | `/api/sessions/:id/thinking` | `{level: off\|minimal\|low\|medium\|high\|xhigh\|max}` |
+| POST | `/api/sessions/:id/compact` | compact context |
 
 ## WebSocket — `/ws`
 

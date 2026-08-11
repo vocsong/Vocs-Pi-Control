@@ -117,27 +117,41 @@ browser protocol; host home/sockets stayed absent — **verified live**.
 - [x] web client: auto lease on subscribe + heartbeat, snapshot handling,
       lease banner + Take control in composer
 
-## Phase 5 — Projects/Workspaces/Sessions
+## Phase 5 — Projects/Workspaces/Sessions (complete)
 
-- [ ] machine/project/workspace hierarchy + navigation UI
-- [ ] workspace onboarding flow (add folder → validate → sandbox → sessions)
+- [x] machine/project/workspace hierarchy + navigation UI (sidebar tree)
+- [x] workspace onboarding flow (add folder → validate → sandbox → sessions)
+- [x] verified: full UI flow — project → workspace → start → real Pi session
 
-## Phase 6 — Files
+## Phase 6 — Files (complete)
 
-- [ ] explorer/editor (CodeMirror), containment tests, upload/download, previews
+- [x] explorer/editor (CodeMirror) with lazy tree, save/dirty, create/
+      rename/delete, image + markdown previews
+- [x] containment tests (lexical + realpath, symlink-aware; traversal and
+      absolute-path attempts rejected — verified live)
 
-## Phase 7 — Git/Worktrees
+## Phase 7 — Git/Worktrees (complete)
 
-- [ ] status/diff/stage/commit/branches via controlled Git service
-- [ ] worktree creation → separate workspace/container
+- [x] status/diff/stage/unstage/commit/branches/log via controlled Git
+      service (porcelain -z parsing unit-tested)
+- [x] worktree creation → separate workspace/container (Invariant D),
+      <parent>/.pi-control-worktrees/<project>/<name>
 
-## Phase 8 — Terminals/Processes/Ports
+## Phase 8 — Terminals/Processes/Ports (complete)
 
-- [ ] PTY (xterm.js), process manager, app runner, localhost port proxy
+- [x] PTY (node-pty in container, pipe fallback elsewhere), xterm.js,
+      multi-tab, reconnect replay, resize
+- [x] process manager + app runner (dev-port range 43100-43119 published
+      loopback-only; verified: server on 43100 served on the host URL)
 
-## Phase 9 — Pi Management UX
+## Phase 9 — Pi Management UX (complete)
 
-- [ ] model/thinking controls, session tree, tools/skills/extensions/packages visibility
+- [x] model picker from the real provider catalog (deepseek verified),
+      thinking level selector, compact, capabilities popover
+      (tools/skills/extensions/prompts — read-only visibility)
+- [x] model switch persisted and applied to the next prompt (verified)
+- [ ] session tree (native pi tree) — deferred: parent/child metadata lands
+      with multi-agent (Phase 14); flat list + lease covers V1
 
 ## Phase 10 — Power UX
 
