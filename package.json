@@ -1,0 +1,24 @@
+{
+  "name": "pi-control",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Local-first web control plane for the Pi coding agent",
+  "packageManager": "pnpm@11.20.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n server,web -c blue,green \"pnpm --filter @pi-control/server dev\" \"pnpm --filter @pi-control/web dev\"",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "pnpm -r build",
+    "db:generate": "pnpm --filter @pi-control/database db:generate"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "concurrently": "^9.1.2",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.3"
+  }
+}

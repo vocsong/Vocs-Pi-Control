@@ -1,0 +1,38 @@
+import Fastify from "fastify";
+import fastifyWebsocket from "@fastify/websocket";
+import type { Db } from "@pi-control/database";
+import type { Logger } from "./logger.js";
+import type { RealtimeHub } from "./realtime/hub.js";
+import type { SessionManager } from "./sessions/manager.js";
+import { registerRealtime } from "./realtime/ws.js";
+import { registerHealthRoutes } from "./routes/health.js";
+import { registerSessionRoutes } from "./routes/sessions.js";
+import type { AppFastify } from "./types.js";
+
+export interface AppDeps {
+  logger: Logger;
+  db: Db;
+  hub: RealtimeHub;
+  sessions: SessionManager;
+  runtimeName: string;
+}
+
+export async function buildApp(deps: AppDeps): Promise<AppFastify> {
+  const app = Fastify({
+    loggerInstance: deps.logger,
+    // Local-first: bind loopback by default; Host/Origin validation is
+    // enforced explicitly (ADR-0008).
+    trustProxy: false,
+  });
+
+  // Boot the websocket plugin BEFORE registering routes: its onRoute hook
+  // must wrap the /ws handler, otherwise the handler receives the fastify
+  // request object instead of the WebSocket.
+  await app.register(fastifyWebsocket);
+
+  registerHealthRoutes(app, deps);
+  registerSessionRoutes(app, deps.sessions);
+  registerRealtime(app, deps);
+
+  return app as AppFastify;
+}
