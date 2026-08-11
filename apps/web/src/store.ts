@@ -83,6 +83,8 @@ interface PiControlState {
   startSandbox(sandboxId: string): Promise<void>;
   stopSandbox(sandboxId: string): Promise<void>;
   removeSandbox(sandboxId: string): Promise<void>;
+  startWorkspaceFlow(workspaceId: string): Promise<void>;
+  stopWorkspaceFlow(workspaceId: string): Promise<void>;
   prepareSandbox(): Promise<void>;
   runSelfTest(): Promise<void>;
   setRequestedFile(path: string | null): void;
@@ -171,6 +173,18 @@ export const usePiControl = create<PiControlState>((set, get) => ({
   startSandbox: async (sandboxId) => {
     const { sandbox } = await api.startSandbox(sandboxId);
     set({ sandboxes: { ...get().sandboxes, [sandboxId]: sandbox } });
+  },
+
+  // Workspace-level convenience: the server ensures the sandbox exists
+  // (auto-created with the workspace name) then starts/stops it.
+  startWorkspaceFlow: async (workspaceId) => {
+    const { sandbox } = await api.startWorkspace(workspaceId);
+    set({ sandboxes: { ...get().sandboxes, [sandbox.id]: sandbox } });
+  },
+
+  stopWorkspaceFlow: async (workspaceId) => {
+    const { sandbox } = await api.stopWorkspace(workspaceId);
+    set({ sandboxes: { ...get().sandboxes, [sandbox.id]: sandbox } });
   },
 
   stopSandbox: async (sandboxId) => {

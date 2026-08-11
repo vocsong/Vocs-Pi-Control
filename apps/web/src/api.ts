@@ -220,6 +220,12 @@ export const api = {
   stopSandbox: (sandboxId: string) =>
     json<{ sandbox: SandboxInfo }>(`/api/sandboxes/${sandboxId}/stop`, { method: "POST" }),
 
+  startWorkspace: (workspaceId: string) =>
+    json<{ sandbox: SandboxInfo }>(`/api/workspaces/${workspaceId}/start`, { method: "POST" }),
+
+  stopWorkspace: (workspaceId: string) =>
+    json<{ sandbox: SandboxInfo }>(`/api/workspaces/${workspaceId}/stop`, { method: "POST" }),
+
   rebuildSandbox: (sandboxId: string, profile?: string) =>
     json<{ sandbox: SandboxInfo }>(`/api/sandboxes/${sandboxId}/rebuild`, {
       method: "POST",

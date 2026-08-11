@@ -475,6 +475,15 @@ export class SandboxManager {
     return this.sandboxInfo(sandboxId, "running");
   }
 
+  /** Return the workspace's sandbox, creating it when missing. */
+  async ensureSandbox(workspaceId: string): Promise<SandboxInfo> {
+    const workspace = this.options.db.select().from(schema.projects).where(eq(schema.projects.id, workspaceId)).get();
+    if (!workspace) throw new Error(`Unknown workspace ${workspaceId}`);
+    const existing = this.options.db.select().from(schema.workspaces).where(eq(schema.workspaces.projectId, workspaceId)).get();
+    if (existing) return this.sandboxInfo(existing.id);
+    return this.createSandbox(workspaceId, { name: workspace.name });
+  }
+
   listSandboxes(workspaceId?: string): SandboxInfo[] {
     const rows = workspaceId
       ? this.options.db.select().from(schema.workspaces).where(eq(schema.workspaces.projectId, workspaceId)).all()
@@ -490,7 +499,8 @@ export class SandboxManager {
 
   /** Re-register persisted sandboxes after a server restart. */
   restoreSandboxes(): void {
-    const rows = this.options.db.select().from(schema.sandboxes).where(eq(schema.sandboxes.state, "running")).all();
+    // Register every row — stopped sandboxes must be startable too.
+    const rows = this.options.db.select().from(schema.sandboxes).all();
     for (const row of rows) {
       this.options.runtime.registerSandbox(row.id, row.containerName);
     }

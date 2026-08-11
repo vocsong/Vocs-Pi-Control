@@ -28,7 +28,7 @@ const SANDBOX_STATUS: Record<string, { dot: string; cls: string }> = {
 };
 
 /* ------------------------------------------------------------------ */
-/* Inline forms                                                        */
+/* Add workspace form                                                  */
 /* ------------------------------------------------------------------ */
 
 function AddWorkspaceForm({ onDone }: { onDone: () => void }) {
@@ -56,7 +56,7 @@ function AddWorkspaceForm({ onDone }: { onDone: () => void }) {
     <div className="inline-form">
       <input placeholder="Workspace name (e.g. my-app)" value={name} onChange={(e) => setName(e.target.value)} />
       <input
-        placeholder="Subfolder under root (optional, default: root/name)"
+        placeholder="Subfolder under the root (optional)"
         value={subfolder}
         onChange={(e) => setSubfolder(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && void submit()}
@@ -74,57 +74,22 @@ function AddWorkspaceForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function AddSandboxForm({ workspace, onDone }: { workspace: WorkspaceInfo; onDone: () => void }) {
-  const createSandbox = usePiControl((s) => s.createSandbox);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const submit = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      // Same name as the workspace; default environment (node + python).
-      await createSandbox(workspace.name);
-      onDone();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="inline-form">
-      <p className="sidebar-empty">Sandbox “{workspace.name}” will be created with the default environment (Node + Python).</p>
-      {error && <div className="form-error">{error}</div>}
-      <div className="form-actions">
-        <button className="btn btn-small" onClick={() => void submit()} disabled={busy}>
-          Create sandbox
-        </button>
-        <button className="btn btn-small" onClick={onDone}>
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
-}
-
 /* ------------------------------------------------------------------ */
-/* Sandbox node (container)                                            */
+/* Workspace row (flattened: start/stop right on the row)              */
 /* ------------------------------------------------------------------ */
 
-function SandboxNode({ sandbox }: { sandbox: SandboxInfo }) {
-  const activeSandboxId = usePiControl((s) => s.activeSandboxId);
-  const setActiveSandbox = usePiControl((s) => s.setActiveSandbox);
-  const startSandbox = usePiControl((s) => s.startSandbox);
-  const stopSandbox = usePiControl((s) => s.stopSandbox);
-  const removeSandbox = usePiControl((s) => s.removeSandbox);
+function WorkspaceRow({ workspace }: { workspace: WorkspaceInfo }) {
+  const sandboxes = usePiControl((s) => s.sandboxes);
+  const activeWorkspaceId = usePiControl((s) => s.activeWorkspaceId);
+  const setActiveWorkspace = usePiControl((s) => s.setActiveWorkspace);
+  const startWorkspaceFlow = usePiControl((s) => s.startWorkspaceFlow);
+  const stopWorkspaceFlow = usePiControl((s) => s.stopWorkspaceFlow);
   const createWorkspaceSession = usePiControl((s) => s.createWorkspaceSession);
   const [busy, setBusy] = useState(false);
-  const [confirmRemove, setConfirmRemove] = useState(false);
-  const [rebuilding, setRebuilding] = useState(false);
 
-  const status = SANDBOX_STATUS[sandbox.status] ?? SANDBOX_STATUS.stopped!;
+  const sandbox = Object.values(sandboxes).find((sb) => sb.workspaceId === workspace.id);
+  const status = SANDBOX_STATUS[sandbox?.status ?? "missing"] ?? SANDBOX_STATUS.missing!;
+  const running = sandbox?.status === "running";
 
   const act = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -137,128 +102,67 @@ function SandboxNode({ sandbox }: { sandbox: SandboxInfo }) {
     }
   };
 
+  const newSession = async () => {
+    // Ensure the sandbox exists + runs (server auto-creates it), then add a session.
+    if (!running) {
+      await act(() => startWorkspaceFlow(workspace.id));
+    }
+    if (sandbox || running) {
+      const current = Object.values(usePiControl.getState().sandboxes).find((sb) => sb.workspaceId === workspace.id);
+      if (current) await act(() => createWorkspaceSession(current.id));
+    }
+  };
+
   const rebuild = async () => {
-    setRebuilding(true);
+    if (!sandbox) return;
+    setBusy(true);
     try {
       const { sandbox: rebuilt } = await api.rebuildSandbox(sandbox.id);
       usePiControl.setState((s) => ({ sandboxes: { ...s.sandboxes, [sandbox.id]: rebuilt } }));
     } catch (e) {
       console.error(e);
     } finally {
-      setRebuilding(false);
+      setBusy(false);
     }
   };
 
   return (
-    <li className={`sandbox-node ${sandbox.id === activeSandboxId ? "active" : ""}`}>
-      <div className="sandbox-row">
-        <button className="sandbox-main" onClick={() => setActiveSandbox(sandbox.id)}>
+    <li className={`workspace-row-item ${workspace.id === activeWorkspaceId ? "active" : ""}`}>
+      <div className="project-row">
+        <button className="project-main" onClick={() => setActiveWorkspace(workspace.id)}>
           <span className={`status-dot ${status.cls}`}>{status.dot}</span>
-          <span className="sandbox-name">{sandbox.name}</span>
-          <span className="sandbox-profile">{sandbox.securityProfile}</span>
+          <span className="project-name">{workspace.name}</span>
         </button>
-        <span className="sandbox-actions">
-          <button
-            className="btn btn-icon"
-            title="New Pi session"
-            disabled={busy || sandbox.status !== "running"}
-            onClick={() => void act(() => createWorkspaceSession(sandbox.id))}
-          >
-            +
-          </button>
-          {sandbox.status === "running" ? (
-            <button className="btn btn-icon" title="Stop" disabled={busy} onClick={() => void act(() => stopSandbox(sandbox.id))}>
+        <span className="project-actions">
+          {running ? (
+            <button className="btn btn-icon" title="Stop" disabled={busy} onClick={() => void act(() => stopWorkspaceFlow(workspace.id))}>
               ■
             </button>
           ) : (
             <button
               className="btn btn-icon"
               title="Start"
-              disabled={busy || sandbox.status === "starting"}
-              onClick={() => void act(() => startSandbox(sandbox.id))}
+              disabled={busy || sandbox?.status === "starting" || sandbox?.status === "building"}
+              onClick={() => void act(() => startWorkspaceFlow(workspace.id))}
             >
               ▶
             </button>
           )}
-          <button
-            className="btn btn-icon"
-            title="Rebuild environment (preserves /workspace + volumes)"
-            disabled={busy || rebuilding || sandbox.status === "building"}
-            onClick={() => void rebuild()}
-          >
-            {rebuilding ? "…" : "⟳"}
+          <button className="btn btn-icon" title="New Pi session" disabled={busy} onClick={() => void newSession()}>
+            +
           </button>
-          {confirmRemove ? (
-            <button
-              className="btn btn-icon btn-danger"
-              title="Confirm remove"
-              onClick={() => void act(() => removeSandbox(sandbox.id))}
-            >
-              ✓
-            </button>
-          ) : (
-            <button className="btn btn-icon" title="Remove container" onClick={() => setConfirmRemove(true)}>
-              ✕
-            </button>
-          )}
-        </span>
-      </div>
-      {sandbox.hostPath && <div className="sandbox-path">{sandbox.hostPath}</div>}
-    </li>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Workspace node (folder)                                             */
-/* ------------------------------------------------------------------ */
-
-function WorkspaceNode({ workspace }: { workspace: WorkspaceInfo }) {
-  const sandboxes = usePiControl((s) => s.sandboxes);
-  const sandboxOrder = usePiControl((s) => s.sandboxOrder);
-  const activeWorkspaceId = usePiControl((s) => s.activeWorkspaceId);
-  const setActiveWorkspace = usePiControl((s) => s.setActiveWorkspace);
-  const [expanded, setExpanded] = useState(true);
-  const [adding, setAdding] = useState(false);
-
-  const workspaceSandboxes = sandboxOrder.filter((id) => sandboxes[id]?.workspaceId === workspace.id);
-
-  return (
-    <li className={`project-node ${workspace.id === activeWorkspaceId ? "active" : ""}`}>
-      <div className="project-row">
-        <button
-          className="project-main"
-          onClick={() => {
-            setActiveWorkspace(workspace.id);
-            setExpanded((v) => !v);
-          }}
-        >
-          <span className="project-caret">{expanded ? "▾" : "▸"}</span>
-          <span className="project-name">{workspace.name}</span>
-        </button>
-        <span className="project-actions">
-          {workspaceSandboxes.length === 0 && (
-            <button className="btn btn-icon" title="Create the sandbox container" onClick={() => setAdding((v) => !v)}>
-              +
-            </button>
-          )}
+          <button className="btn btn-icon" title="Rebuild environment" disabled={busy || !sandbox} onClick={() => void rebuild()}>
+            ⟳
+          </button>
         </span>
       </div>
       <div className="workspace-path">{workspace.hostRootPath}</div>
-      {expanded && (
-        <ul className="sandbox-list">
-          {workspaceSandboxes.map((id) => {
-            const sandbox = sandboxes[id];
-            return sandbox ? <SandboxNode key={id} sandbox={sandbox} /> : null;
-          })}
-          {adding && <AddSandboxForm workspace={workspace} onDone={() => setAdding(false)} />}
-        </ul>
-      )}
     </li>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* Sandbox panel                                                       */
+/* Runtime panel                                                       */
 /* ------------------------------------------------------------------ */
 
 function SandboxPanel() {
@@ -329,8 +233,6 @@ export function Sidebar() {
   const [addingWorkspace, setAddingWorkspace] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
 
-  const runningSandbox = Object.values(sandboxes).find((sb) => sb.status === "running");
-
   const newSession = async () => {
     setSessionError(null);
     try {
@@ -350,17 +252,18 @@ export function Sidebar() {
           </button>
         </div>
         {workspaceOrder.length === 0 && !addingWorkspace ? (
-          <p className="sidebar-empty">
-            No workspaces yet. Add one — it will be created inside the workspace root.
-          </p>
+          <p className="sidebar-empty">No workspaces yet. Add one — it gets its sandbox automatically.</p>
         ) : (
           <ul className="project-list">
             {workspaceOrder.map((id) => {
               const workspace = workspaces[id];
-              return workspace ? <WorkspaceNode key={id} workspace={workspace} /> : null;
+              return workspace ? <WorkspaceRow key={id} workspace={workspace} /> : null;
             })}
             {addingWorkspace && <AddWorkspaceForm onDone={() => setAddingWorkspace(false)} />}
           </ul>
+        )}
+        {Object.keys(sandboxes).length === 0 && workspaceOrder.length > 0 && (
+          <p className="sidebar-empty">Press ▶ to create and start the sandbox.</p>
         )}
       </div>
 
@@ -369,17 +272,18 @@ export function Sidebar() {
           <span>Sessions</span>
           <button
             className="btn btn-small"
-            disabled={!runningSandbox}
-            title={runningSandbox ? "New real Pi session in the running sandbox" : "Start a sandbox first"}
+            disabled={workspaceOrder.length === 0}
+            title={workspaceOrder.length === 0 ? "Create a workspace first" : "New Pi session (auto-starts the sandbox)"}
             onClick={() => void newSession()}
           >
             + New
           </button>
         </div>
-        {!runningSandbox && <p className="sidebar-empty">Start a sandbox (▶) to create real Pi sessions.</p>}
         {sessionError && <div className="form-error">{sessionError}</div>}
         {sessionOrder.length === 0 ? (
-          <p className="sidebar-empty">No sessions yet. Create one to start.</p>
+          <p className="sidebar-empty">
+            {workspaceOrder.length === 0 ? "Add a workspace to get started." : "Create a session to start chatting with Pi."}
+          </p>
         ) : (
           <ul className="session-list">
             {sessionOrder.map((id) => {
@@ -395,11 +299,7 @@ export function Sidebar() {
                       {STATUS_DOT[session.status] ?? "○"}
                     </span>
                     <span className="session-title">{session.title}</span>
-                    {session.workspaceId ? (
-                      <span className="session-badge">sandbox</span>
-                    ) : (
-                      <span className="session-badge mock">mock</span>
-                    )}
+                    <span className="session-badge">sandbox</span>
                   </button>
                 </li>
               );
