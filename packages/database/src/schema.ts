@@ -218,6 +218,22 @@ export const traces = sqliteTable(
   (t) => [index("traces_workspace_idx").on(t.workspaceId)],
 );
 
+/**
+ * Per-sandbox dev-port slot ownership (issue #10). The row survives while
+ * the sandbox record exists (stopped sandboxes keep their host range); it
+ * is deleted when the sandbox is removed/archived. The unique slot
+ * constraint prevents two sandboxes from ever holding the same range.
+ */
+export const devPortSlots = sqliteTable(
+  "dev_port_slots",
+  {
+    sandboxId: text("sandbox_id").primaryKey(),
+    slot: integer("slot").notNull().unique(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [index("dev_port_slots_slot_idx").on(t.slot)],
+);
+
 /** Per-scope event sequence checkpoints for reconnect/replay (plan §26). */
 export const eventCheckpoints = sqliteTable(
   "event_checkpoints",

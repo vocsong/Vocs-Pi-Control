@@ -4965,6 +4965,45 @@ function modelRef(model) {
 
 // src/exec.ts
 var import_node_child_process = require("node:child_process");
+
+// src/credentials.ts
+var KNOWN_CREDENTIAL_VARS = /* @__PURE__ */ new Set([
+  "ANTHROPIC_API_KEY",
+  "DEEPSEEK_API_KEY",
+  "OPENAI_API_KEY",
+  "OPENROUTER_API_KEY",
+  "GEMINI_API_KEY",
+  "GOOGLE_API_KEY",
+  "GROQ_API_KEY",
+  "MISTRAL_API_KEY",
+  "TOGETHER_API_KEY",
+  "XAI_API_KEY",
+  "PERPLEXITY_API_KEY",
+  "AZURE_OPENAI_API_KEY",
+  "OLLAMA_API_KEY",
+  "HF_TOKEN",
+  "HUGGINGFACE_TOKEN",
+  "GITHUB_TOKEN",
+  "NPM_TOKEN"
+]);
+var CREDENTIAL_PATTERN = /(^|_)(API[_-]?KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?)(_|$)/i;
+function normalizeVarName(name) {
+  return name.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase();
+}
+function isCredentialVar(name) {
+  const upper = name.toUpperCase();
+  if (KNOWN_CREDENTIAL_VARS.has(upper)) return true;
+  return CREDENTIAL_PATTERN.test(normalizeVarName(name));
+}
+function scrubbedChildEnv(extra = {}) {
+  const env = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== void 0 && !isCredentialVar(key)) env[key] = value;
+  }
+  return { ...env, ...extra };
+}
+
+// src/exec.ts
 function runExec(request, emitOutput) {
   return new Promise((resolve) => {
     const startedAt = Date.now();
@@ -4976,7 +5015,7 @@ function runExec(request, emitOutput) {
     let settled = false;
     const child = (0, import_node_child_process.spawn)(command[0] ?? "", command.slice(1), {
       cwd: request.cwd ?? "/workspace",
-      env: { ...process.env, ...request.env },
+      env: scrubbedChildEnv(request.env),
       stdio: ["ignore", "pipe", "pipe"]
     });
     const finish = (exitCode) => {
@@ -5054,20 +5093,32 @@ var FileService = class {
   }
   /**
    * Containment check: lexical first (works for paths that do not exist
-   * yet), then real-path (symlink-aware) for existing paths.
+   * yet), then real-path (symlink-aware) for the deepest existing
+   * ancestor. The ancestor walk matters for writes: a symlinked parent
+   * can point outside the root even when the final path does not exist
+   * yet, and mkdir/writeFile would follow it (#2).
    */
   assertContained(resolved) {
     const outside = (p) => p !== this.rootReal && !p.startsWith(this.rootReal + import_node_path2.default.sep);
     if (outside(resolved)) {
       throw new Error(`path escapes the workspace: ${resolved}`);
     }
-    try {
-      const real = import_node_fs2.default.realpathSync(resolved);
+    let probe = resolved;
+    for (; ; ) {
+      let real;
+      try {
+        real = import_node_fs2.default.realpathSync(probe);
+      } catch (error) {
+        if (error.code !== "ENOENT") throw error;
+        const parent = import_node_path2.default.dirname(probe);
+        if (parent === probe) break;
+        probe = parent;
+        continue;
+      }
       if (outside(real)) {
         throw new Error(`path escapes the workspace: ${resolved}`);
       }
-    } catch (error) {
-      if (error.code !== "ENOENT") throw error;
+      break;
     }
   }
   async list(relDir = "") {
@@ -12104,7 +12155,7 @@ var ProcessSupervisor = class {
     };
     const child = (0, import_node_child_process7.spawn)(request.command[0] ?? "", request.command.slice(1), {
       cwd,
-      env: { ...process.env, ...request.env },
+      env: scrubbedChildEnv(request.env),
       detached: true,
       stdio: ["ignore", "pipe", "pipe"]
     });
@@ -12447,7 +12498,7 @@ var TerminalManager = class {
         cols,
         rows,
         cwd: this.cwd,
-        env: process.env,
+        env: scrubbedChildEnv(),
         name: "xterm-256color"
       });
       pty.on("data", (data) => this.dispatch(id, data));
@@ -12455,7 +12506,7 @@ var TerminalManager = class {
     } else {
       child = (0, import_node_child_process8.spawn)(shell, [], {
         cwd: this.cwd,
-        env: process.env,
+        env: scrubbedChildEnv(),
         stdio: ["pipe", "pipe", "pipe"]
       });
       child.stdout?.on("data", (chunk) => this.dispatch(id, chunk.toString("utf8")));

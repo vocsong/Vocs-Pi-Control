@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { AppFastify } from "../types.js";
 import type { AgentManager } from "../agents/agentManager.js";
-import { DEV_PORT_RANGE, devRangeForSlot } from "../sandbox/manager.js";
+import { devRangeForSlot, slotForDevHostStart } from "../sandbox/devPorts.js";
 import { schema, type Db } from "@pi-control/database";
 import { eq } from "drizzle-orm";
 
@@ -23,20 +23,16 @@ export function registerTerminalRoutes(app: AppFastify, agents: AgentManager, db
       .from(schema.sandboxes)
       .where(eq(schema.sandboxes.workspaceId, sandboxId))
       .get();
-    let slot = 0;
+    let start: number | undefined;
     if (row?.configJson) {
       try {
         const spec = JSON.parse(row.configJson) as { devHostStart?: number };
-        const start = spec.devHostStart;
-        if (typeof start === "number" && Number.isFinite(start)) {
-          slot = Math.round((start - DEV_PORT_RANGE.hostStart) / DEV_PORT_RANGE.count);
-          if (slot < 0 || slot >= 10) slot = 0;
-        }
+        start = spec.devHostStart;
       } catch {
         /* malformed config → legacy slot 0 */
       }
     }
-    return devRangeForSlot(slot);
+    return devRangeForSlot(slotForDevHostStart(start));
   }
 
   app.get("/api/sandboxes/:sandboxId/terminals", async (request, reply) => {

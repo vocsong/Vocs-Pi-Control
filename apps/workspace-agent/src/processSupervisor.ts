@@ -8,6 +8,7 @@
 
 import { spawn, type ChildProcess } from "node:child_process";
 import { newId, nowIso } from "@pi-control/shared";
+import { scrubbedChildEnv } from "./credentials.js";
 import type {
   AgentProcessInfo,
   AgentProcessOutputPayload,
@@ -51,7 +52,7 @@ export class ProcessSupervisor {
 
     const child = spawn(request.command[0] ?? "", request.command.slice(1), {
       cwd,
-      env: { ...process.env, ...request.env },
+      env: scrubbedChildEnv(request.env),
       detached: true,
       stdio: ["ignore", "pipe", "pipe"],
     });

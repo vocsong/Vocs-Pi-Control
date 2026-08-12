@@ -99,6 +99,10 @@ async function main(): Promise<void> {
     rootFolder: () => settings.rootFolder(),
   });
   sandbox.restoreSandboxes();
+  // Claim dev-port slots for legacy sandboxes so new allocations cannot
+  // collide with stopped containers that still hold their ranges (#10).
+  const legacySlots = sandbox.seedLegacyDevSlots();
+  if (legacySlots > 0) logger.info({ legacySlots }, "legacy dev-port slots claimed");
   // Server restart policy: everything stopped, folders synced from the root.
   await sandbox.stopAllSandboxes();
   sandbox.syncWorkspacesFromRoot();

@@ -85,6 +85,37 @@ describe("SandboxManager", () => {
     expect(workspace.id).toBe(row?.id);
   });
 
+  it("reuses freed dev-port slots and keeps per-sandbox allocation (#10)", async () => {
+    const { manager } = makeManager();
+    mkdirSync(path.join(scratch, "a"));
+    mkdirSync(path.join(scratch, "b"));
+    mkdirSync(path.join(scratch, "c"));
+    const a = (await manager.createWorkspace({ name: "a", hostRootPath: path.join(scratch, "a") })).sandbox;
+    const b = (await manager.createWorkspace({ name: "b", hostRootPath: path.join(scratch, "b") })).sandbox;
+    expect(a.devHostStart).toBe(43100);
+    expect(b.devHostStart).toBe(43120);
+    await manager.removeSandbox(a.id);
+    const c = (await manager.createWorkspace({ name: "c", hostRootPath: path.join(scratch, "c") })).sandbox;
+    expect(c.devHostStart).toBe(43100);
+    // b keeps its slot after a new sandbox is created.
+    expect((await manager.sandboxInfo(b.id)).devHostStart).toBe(43120);
+  });
+
+  it("claims legacy configJson dev-port slots at boot (#10)", async () => {
+    const { db, manager } = makeManager();
+    mkdirSync(path.join(scratch, "app"));
+    const w = (await manager.createWorkspace({ name: "app", hostRootPath: path.join(scratch, "app") })).sandbox;
+    // Simulate a legacy record: configJson has the slot, the table does not.
+    db.delete(schema.devPortSlots).where(eq(schema.devPortSlots.sandboxId, w.id)).run();
+    expect(manager.seedLegacyDevSlots()).toBeGreaterThan(0);
+    const row = db.select().from(schema.devPortSlots).where(eq(schema.devPortSlots.sandboxId, w.id)).get();
+    expect(row?.slot).toBe(0);
+    // A new sandbox must not collide with the seeded legacy slot.
+    mkdirSync(path.join(scratch, "b"));
+    const b = (await manager.createWorkspace({ name: "b", hostRootPath: path.join(scratch, "b") })).sandbox;
+    expect(b.devHostStart).toBe(43120);
+  });
+
   it("creates a project from a real directory", async () => {
     const { manager } = makeManager();
     const project = (await manager.createWorkspace({ name: "app", hostRootPath: scratch })).workspace;

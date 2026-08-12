@@ -12,7 +12,17 @@ export function openDatabase(dbPath: string): Db {
   if (dbPath !== ":memory:") {
     fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   }
-  return openDb(dbPath);
+  const db = openDb(dbPath);
+  // The control plane stores provider keys in SQLite (V1 boundary,
+  // ADR-0010); restrict file access where the platform supports it (#5).
+  if (dbPath !== ":memory:" && process.platform !== "win32") {
+    try {
+      fs.chmodSync(dbPath, 0o600);
+    } catch {
+      // best-effort; some filesystems ignore POSIX modes
+    }
+  }
+  return db;
 }
 
 /** Ensure the local machine record exists (plan §4.1). */

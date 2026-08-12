@@ -12,6 +12,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import os from "node:os";
 import { spawn, type ChildProcess } from "node:child_process";
+import { scrubbedChildEnv } from "./credentials.js";
 import { newId, nowIso } from "@pi-control/shared";
 import type { AgentTerminalInfo, AgentTerminalOpenRequest } from "@pi-control/protocol";
 
@@ -88,7 +89,7 @@ export class TerminalManager {
         cols,
         rows,
         cwd: this.cwd,
-        env: process.env as Record<string, string>,
+        env: scrubbedChildEnv() as Record<string, string>,
         name: "xterm-256color",
       }) as unknown as PtyLike;
       pty.on("data", (data: string) => this.dispatch(id, data));
@@ -96,7 +97,7 @@ export class TerminalManager {
     } else {
       child = spawn(shell, [], {
         cwd: this.cwd,
-        env: process.env,
+        env: scrubbedChildEnv(),
         stdio: ["pipe", "pipe", "pipe"],
       });
       child.stdout?.on("data", (chunk: Buffer) => this.dispatch(id, chunk.toString("utf8")));

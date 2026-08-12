@@ -91,21 +91,10 @@ export const AGENT_CONTAINER_PORT = 4175;
  * started inside the sandbox on these ports are reachable at
  * http://127.0.0.1:<port> on the host (plan §16.2). Container ports stay
  * in DEV_PORT_RANGE; the HOST side shifts by a per-sandbox slot so
- * multiple sandboxes can run at once without colliding.
+ * multiple sandboxes can run at once without colliding (#10).
  */
-export const DEV_PORT_RANGE = { hostStart: 43100, containerStart: 43100, count: 20 };
-
-/** Number of per-sandbox host-side slots over the dev range. */
-export const DEV_PORT_SLOTS = 10;
-
-/** Host-side range for a slot: container ports 43100–43119, host shifted by slot. */
-export function devRangeForSlot(slot: number): { hostStart: number; containerStart: number; count: number } {
-  return {
-    hostStart: DEV_PORT_RANGE.hostStart + slot * DEV_PORT_RANGE.count,
-    containerStart: DEV_PORT_RANGE.containerStart,
-    count: DEV_PORT_RANGE.count,
-  };
-}
+import { DEV_PORT_RANGE, DEV_PORT_SLOTS, devRangeForSlot, slotForDevHostStart } from "./devPorts.js";
+export { DEV_PORT_RANGE, DEV_PORT_SLOTS, devRangeForSlot, slotForDevHostStart };
 
 /** Environment profile → image reference (plan §11). */
 export function imageForProfile(profile: "node" | "python" | "universal"): string {
@@ -441,6 +430,8 @@ export class SandboxManager {
       sandbox = await this.options.runtime.createWorkspace(spec);
       this.options.runtime.registerSandbox(sandbox.id, containerName);
     } catch (error) {
+      // A failed create must not hold the dev-port slot forever (#10).
+      this.releaseDevSlot(sandboxId);
       this.publishSandboxError(sandboxId, error);
       throw error;
     }
@@ -531,6 +522,9 @@ export class SandboxManager {
       .where(eq(schema.workspaces.id, sandboxId))
       .run();
     this.options.db.update(schema.sandboxes).set({ state: "missing" }).where(eq(schema.sandboxes.id, sandbox.id)).run();
+    // The dev-port slot is released when the sandbox record is archived so
+    // a removed sandbox never consumes a range permanently (#10).
+    this.releaseDevSlot(sandboxId);
   }
 
   /**
@@ -764,24 +758,99 @@ export class SandboxManager {
     this.options.agents.connect(sandboxId, endpoint);
   }
 
-  /** Lowest free dev slot across all sandboxes (excluding the given one). */
-  private allocateDevSlot(excludingSandboxId: string): number {
-    const rows = this.options.db.select().from(schema.sandboxes).all();
-    const used = new Set<number>();
-    for (const row of rows) {
-      if (row.workspaceId === excludingSandboxId) continue;
-      const start = this.devHostStartOf(row.configJson);
-      if (start !== undefined) {
-        const slot = Math.round((start - DEV_PORT_RANGE.hostStart) / DEV_PORT_RANGE.count);
-        if (slot >= 0 && slot < DEV_PORT_SLOTS) used.add(slot);
-      }
+  /**
+   * Allocate this sandbox's dev-port slot. Allocation is persisted in
+   * dev_port_slots (unique slot constraint); stopped sandboxes keep their
+   * slot, removal/archival releases it, and historical records never cause
+   * false exhaustion (#10). Rebuilds keep the existing slot; legacy
+   * sandboxes with a devHostStart in configJson claim that slot first.
+   */
+  private allocateDevSlot(sandboxId: string): number {
+    // A row already exists (rebuild/restart path): keep the same slot.
+    const existing = this.options.db
+      .select({ slot: schema.devPortSlots.slot })
+      .from(schema.devPortSlots)
+      .where(eq(schema.devPortSlots.sandboxId, sandboxId))
+      .get();
+    if (existing) return existing.slot;
+
+    // Legacy record (pre-allocation-table): claim its configured slot when
+    // it is still free, so rebuilds do not drift and new sandboxes cannot
+    // collide with it.
+    const legacySlot = this.legacySlotOf(sandboxId);
+    if (legacySlot !== undefined && this.claimSlot(sandboxId, legacySlot)) {
+      return legacySlot;
     }
+
     for (let slot = 0; slot < DEV_PORT_SLOTS; slot++) {
-      if (!used.has(slot)) return slot;
+      if (this.claimSlot(sandboxId, slot)) return slot;
     }
     throw new Error(
-      `No free dev-port slots (${DEV_PORT_SLOTS} max) — stop a sandbox to free its range`,
+      `No free dev-port slots (${DEV_PORT_SLOTS} max) — remove an archived sandbox to free its range`,
     );
+  }
+
+  /** Try to persist sandboxId -> slot atomically; false when taken (#10). */
+  private claimSlot(sandboxId: string, slot: number): boolean {
+    try {
+      this.options.db
+        .insert(schema.devPortSlots)
+        .values({ sandboxId, slot, updatedAt: nowIso() })
+        .onConflictDoNothing()
+        .run();
+      return (
+        this.options.db
+          .select({ sandboxId: schema.devPortSlots.sandboxId })
+          .from(schema.devPortSlots)
+          .where(eq(schema.devPortSlots.sandboxId, sandboxId))
+          .get() !== undefined
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  /** Release a sandbox's slot (removal/archival or failed create). */
+  private releaseDevSlot(sandboxId: string): void {
+    try {
+      this.options.db.delete(schema.devPortSlots).where(eq(schema.devPortSlots.sandboxId, sandboxId)).run();
+    } catch {
+      // best-effort; a stray row only reserves a range
+    }
+  }
+
+  /** Slot configured in a legacy sandbox's configJson, if any (#10). */
+  private legacySlotOf(sandboxId: string): number | undefined {
+    const runtimeRow = this.options.db
+      .select()
+      .from(schema.sandboxes)
+      .where(eq(schema.sandboxes.workspaceId, sandboxId))
+      .get();
+    const start = this.devHostStartOf(runtimeRow?.configJson);
+    return start === undefined ? undefined : slotForDevHostStart(start);
+  }
+
+  /**
+   * Claim slots for pre-existing sandboxes (legacy configJson) at boot so
+   * new allocations cannot collide with stopped legacy containers. Returns
+   * the number of slots claimed (#10).
+   */
+  seedLegacyDevSlots(): number {
+    let claimed = 0;
+    const rows = this.options.db.select().from(schema.sandboxes).all();
+    for (const row of rows) {
+      const start = this.devHostStartOf(row.configJson);
+      if (start === undefined) continue;
+      const slot = slotForDevHostStart(start);
+      const holder = this.options.db
+        .select({ sandboxId: schema.devPortSlots.sandboxId })
+        .from(schema.devPortSlots)
+        .where(eq(schema.devPortSlots.slot, slot))
+        .get();
+      if (holder && holder.sandboxId !== row.workspaceId) continue; // taken by another sandbox
+      if (this.claimSlot(row.workspaceId, slot)) claimed++;
+    }
+    return claimed;
   }
 
   private devHostStartOf(configJson: string | null | undefined): number | undefined {

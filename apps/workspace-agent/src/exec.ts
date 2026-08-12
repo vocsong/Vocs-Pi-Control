@@ -5,6 +5,7 @@
  */
 
 import { spawn } from "node:child_process";
+import { scrubbedChildEnv } from "./credentials.js";
 import type { AgentExecExitPayload, AgentExecRequest } from "@pi-control/protocol";
 
 export interface ExecResult {
@@ -27,7 +28,7 @@ export function runExec(request: AgentExecRequest, emitOutput?: (stream: "stdout
 
     const child = spawn(command[0] ?? "", command.slice(1), {
       cwd: request.cwd ?? "/workspace",
-      env: { ...process.env, ...request.env },
+      env: scrubbedChildEnv(request.env),
       stdio: ["ignore", "pipe", "pipe"],
     });
 
