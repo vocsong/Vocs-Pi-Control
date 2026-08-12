@@ -1,0 +1,298 @@
+/* ============================================================
+   GLASS // AURORA — frosted glass, aurora gradients, soft light
+   ============================================================ */
+
+html.theme-glass {
+  --bg: #0b1020;
+  --bg-raised: rgba(255, 255, 255, 0.07);
+  --bg-input: rgba(255, 255, 255, 0.09);
+  --border: rgba(255, 255, 255, 0.14);
+  --text: #eef2ff;
+  --text-dim: #a7b3d9;
+  --accent: #7dd3fc;
+  --accent-dim: rgba(125, 211, 252, 0.25);
+  --danger: #fda4af;
+  --ok: #86efac;
+  --warn: #fcd34d;
+  --radius: 14px;
+  font-family: "Space Grotesk", system-ui, sans-serif;
+}
+
+html.theme-glass body {
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  background:
+    radial-gradient(800px 500px at 12% -8%, rgba(45, 212, 191, 0.22), transparent 60%),
+    radial-gradient(900px 600px at 88% 12%, rgba(167, 139, 250, 0.2), transparent 60%),
+    radial-gradient(700px 500px at 50% 110%, rgba(244, 114, 182, 0.16), transparent 60%),
+    linear-gradient(180deg, #0d1330, #0b1020);
+  background-attachment: fixed;
+}
+
+/* floating aurora orbs */
+html.theme-glass body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(240px 240px at 20% 30%, rgba(45, 212, 191, 0.16), transparent 70%),
+    radial-gradient(300px 300px at 75% 65%, rgba(167, 139, 250, 0.14), transparent 70%),
+    radial-gradient(200px 200px at 45% 85%, rgba(244, 114, 182, 0.12), transparent 70%);
+  animation: aurora-drift 16s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-drift {
+  from { transform: translate3d(-2%, -1%, 0) scale(1); }
+  to { transform: translate3d(2%, 2%, 0) scale(1.06); }
+}
+
+/* Glass surface recipe */
+html.theme-glass .sidebar,
+html.theme-glass .app-header,
+html.theme-glass .statusbar,
+html.theme-glass .settings-section,
+html.theme-glass .process-card,
+html.theme-glass .task-row,
+html.theme-glass .msg-tool,
+html.theme-glass .palette,
+html.theme-glass .composer,
+html.theme-glass .session-header,
+html.theme-glass .trace-header,
+html.theme-glass .files-editor-header,
+html.theme-glass .terminal-tabs,
+html.theme-glass .tabbar,
+html.theme-glass .msg-user {
+  background: rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* Detached floating sidebar */
+html.theme-glass .sidebar {
+  margin: 10px;
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+html.theme-glass .sidebar-section-header {
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+}
+
+html.theme-glass .project-main,
+html.theme-glass .session-item,
+html.theme-glass .file-tree-row,
+html.theme-glass .git-log-row {
+  border-radius: 12px;
+}
+
+html.theme-glass .workspace-row-item.active .project-main,
+html.theme-glass .session-item.active {
+  background: linear-gradient(90deg, rgba(125, 211, 252, 0.22), rgba(167, 139, 250, 0.1));
+  border-color: rgba(125, 211, 252, 0.45);
+  box-shadow: inset 0 0 12px rgba(125, 211, 252, 0.1);
+}
+
+html.theme-glass .btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  color: var(--text);
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+html.theme-glass .btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+html.theme-glass .btn-primary {
+  background: linear-gradient(120deg, #2dd4bf, #7dd3fc 45%, #a78bfa);
+  border: none;
+  color: #0b1020;
+  font-weight: 600;
+  box-shadow: 0 4px 20px rgba(125, 211, 252, 0.35);
+}
+
+html.theme-glass .btn-danger {
+  background: rgba(253, 164, 175, 0.12);
+  border-color: rgba(253, 164, 175, 0.4);
+}
+
+html.theme-glass .tabbar {
+  border-bottom: none;
+}
+
+html.theme-glass .tab {
+  border-radius: 10px;
+  margin: 6px 2px;
+  padding: 6px 14px;
+  border-bottom: none;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+html.theme-glass .tab.active {
+  background: linear-gradient(120deg, rgba(45, 212, 191, 0.3), rgba(167, 139, 250, 0.3));
+  color: #fff;
+  border-bottom: none;
+  box-shadow: inset 0 0 14px rgba(125, 211, 252, 0.15);
+}
+
+html.theme-glass .app-title {
+  font-family: "Outfit", sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  background: linear-gradient(90deg, #2dd4bf, #7dd3fc, #a78bfa, #f472b6);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+html.theme-glass .app-logo {
+  color: transparent;
+  background: linear-gradient(135deg, #2dd4bf, #a78bfa);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+/* Chat */
+html.theme-glass .msg-user {
+  background: linear-gradient(135deg, rgba(45, 212, 191, 0.35), rgba(125, 211, 252, 0.2));
+  border-radius: 18px 18px 4px 18px;
+  border: 1px solid rgba(125, 211, 252, 0.35);
+}
+
+html.theme-glass .msg-assistant {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 18px 18px 18px 4px;
+  padding: 12px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+html.theme-glass .msg-thinking {
+  border-left: 2px solid rgba(167, 139, 250, 0.7);
+}
+
+html.theme-glass .msg-role {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+html.theme-glass .msg-thinking .msg-role {
+  color: #c4b5fd;
+}
+
+html.theme-glass .msg-tool {
+  border-radius: 16px;
+}
+
+html.theme-glass .tool-input pre,
+html.theme-glass .tool-output {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+/* Composer */
+html.theme-glass .composer {
+  border-top: none;
+  margin: 0 10px 10px;
+  border-radius: 18px;
+}
+
+html.theme-glass .composer textarea {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  caret-color: #7dd3fc;
+}
+
+html.theme-glass .composer textarea:focus {
+  border-color: rgba(125, 211, 252, 0.6);
+  box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.15);
+}
+
+/* Sidebar pieces */
+html.theme-glass .session-badge {
+  background: rgba(125, 211, 252, 0.15);
+  border-color: rgba(125, 211, 252, 0.4);
+  border-radius: 8px;
+}
+
+html.theme-glass .sandbox-panel {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Status dots as soft lights */
+html.theme-glass .status-running {
+  color: var(--ok);
+  text-shadow: 0 0 12px rgba(134, 239, 172, 0.7);
+}
+
+html.theme-glass .status-waiting,
+html.theme-glass .status-starting {
+  color: var(--warn);
+  text-shadow: 0 0 10px rgba(252, 211, 77, 0.6);
+}
+
+html.theme-glass .status-error {
+  color: var(--danger);
+  text-shadow: 0 0 10px rgba(253, 164, 175, 0.6);
+}
+
+/* Terminal + git glass details */
+html.theme-glass .terminal-tab {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+}
+
+html.theme-glass .terminal-tab.active {
+  background: rgba(125, 211, 252, 0.2);
+  border-color: rgba(125, 211, 252, 0.5);
+}
+
+html.theme-glass .git-diff-toolbar .active,
+html.theme-glass .task-controls .active {
+  background: rgba(125, 211, 252, 0.18);
+  border-color: rgba(125, 211, 252, 0.5);
+  color: var(--accent);
+}
+
+html.theme-glass .files-tree-pane,
+html.theme-glass .git-changes-list {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+html.theme-glass .palette {
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+
+html.theme-glass .palette input {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+html.theme-glass ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+html.theme-glass ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+}
+
+html.theme-glass ::-webkit-scrollbar-thumb:hover {
+  background: rgba(125, 211, 252, 0.3);
+}

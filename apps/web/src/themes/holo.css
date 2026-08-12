@@ -1,0 +1,443 @@
+/* ============================================================
+   HOLO // TERMINAL-X — phosphor CRT, hard edges, monospace only
+   ============================================================ */
+
+html.theme-holo {
+  --bg: #050505;
+  --bg-raised: #0a0a0a;
+  --bg-input: #0c0c0c;
+  --border: #1d2b1d;
+  --text: #33ff66;
+  --text-dim: #1f8a44;
+  --accent: #33ff66;
+  --accent-dim: rgba(51, 255, 102, 0.2);
+  --danger: #ff5555;
+  --ok: #33ff66;
+  --warn: #ffb000;
+  --radius: 0px;
+  font-family: "IBM Plex Mono", "JetBrains Mono", Consolas, monospace;
+}
+
+html.theme-holo body {
+  font-family: "IBM Plex Mono", "JetBrains Mono", Consolas, monospace;
+  background: #050505;
+}
+
+/* CRT scanlines + vignette */
+html.theme-holo body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0px,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.18) 3px,
+    rgba(0, 0, 0, 0) 4px
+  );
+  mix-blend-mode: multiply;
+}
+
+html.theme-holo body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+}
+
+/* subtle phosphor flicker */
+html.theme-holo #root {
+  animation: holo-flicker 4s steps(60) infinite;
+}
+
+@keyframes holo-flicker {
+  0%, 100% { opacity: 1; }
+  92% { opacity: 1; }
+  93% { opacity: 0.94; }
+  94% { opacity: 1; }
+  97% { opacity: 0.97; }
+  98% { opacity: 1; }
+}
+
+/* Header = terminal title bar */
+html.theme-holo .app-header {
+  background: #0a0a0a;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+html.theme-holo .app-header::before {
+  content: "[ vocs-pi-control :: secure-agent-terminal ]";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.2em;
+}
+
+html.theme-holo .app-title {
+  color: var(--accent);
+  text-shadow: 0 0 8px rgba(51, 255, 102, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 13px;
+}
+
+html.theme-holo .app-logo {
+  color: var(--accent);
+  text-shadow: 0 0 8px rgba(51, 255, 102, 0.7);
+}
+
+html.theme-holo .app-subtitle {
+  display: none;
+}
+
+html.theme-holo .sidebar {
+  border-right: 1px solid var(--border);
+  background: #070707;
+}
+
+html.theme-holo .sidebar-section-header {
+  color: var(--accent);
+  letter-spacing: 0.2em;
+}
+
+html.theme-holo .sidebar-section-header span::before {
+  content: "▸▸ ";
+  color: var(--text-dim);
+}
+
+html.theme-holo .sidebar-empty {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* Blocky rows, inverted on active */
+html.theme-holo .project-main,
+html.theme-holo .session-item {
+  border: 1px solid transparent;
+}
+
+html.theme-holo .workspace-row-item.active .project-main,
+html.theme-holo .session-item.active {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+}
+
+html.theme-holo .workspace-row-item.active .project-main .status-dot,
+html.theme-holo .session-item.active .status-dot {
+  color: #000;
+  text-shadow: none;
+}
+
+html.theme-holo .btn {
+  background: #0a0a0a;
+  border: 1px solid var(--accent);
+  border-radius: 0;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 11px;
+  font-family: inherit;
+  transition: background 0.08s ease;
+}
+
+html.theme-holo .btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: #000;
+  box-shadow: 0 0 12px rgba(51, 255, 102, 0.4);
+}
+
+html.theme-holo .btn-primary {
+  background: var(--accent);
+  color: #000;
+  box-shadow: 0 0 10px rgba(51, 255, 102, 0.35);
+}
+
+html.theme-holo .btn-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+html.theme-holo .btn-danger:hover:not(:disabled) {
+  background: var(--danger);
+  color: #000;
+}
+
+/* Tabs = command line switches */
+html.theme-holo .tabbar {
+  background: #080808;
+  border-bottom: 1px solid var(--border);
+}
+
+html.theme-holo .tab {
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 11px;
+  border-bottom: 2px solid transparent;
+}
+
+html.theme-holo .tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  text-shadow: 0 0 8px rgba(51, 255, 102, 0.5);
+  background: rgba(51, 255, 102, 0.08);
+}
+
+/* Chat = terminal log */
+html.theme-holo .msg-user {
+  background: transparent;
+  border: none;
+  border-left: 2px solid var(--accent);
+  border-radius: 0;
+  max-width: 100%;
+  padding: 4px 10px;
+}
+
+html.theme-holo .msg-user .msg-role::before {
+  content: "[YOU] ";
+  color: var(--accent);
+}
+
+html.theme-holo .msg-user .msg-role {
+  color: var(--text-dim);
+}
+
+html.theme-holo .msg-assistant {
+  border: none;
+  border-left: 2px solid #3f6e4a;
+  padding-left: 10px;
+}
+
+html.theme-holo .msg-assistant .msg-role::before {
+  content: "[PI] ";
+  color: var(--accent);
+}
+
+html.theme-holo .msg-role {
+  text-transform: none;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+html.theme-holo .msg-thinking {
+  border-left: 2px solid #3f5f3f;
+}
+
+html.theme-holo .msg-thinking .msg-role::before {
+  content: "[THINK] ";
+  color: var(--text-dim);
+}
+
+html.theme-holo .thinking-text {
+  color: var(--text-dim);
+  font-style: normal;
+}
+
+html.theme-holo .msg-tool {
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: #080808;
+}
+
+html.theme-holo .msg-tool .msg-role::before {
+  content: "▸ ";
+  color: var(--accent);
+}
+
+html.theme-holo .tool-input pre,
+html.theme-holo .tool-output {
+  background: #050505;
+  border: 1px dashed #1d2b1d;
+  border-radius: 0;
+}
+
+html.theme-holo .cursor-blink {
+  background: var(--accent);
+  color: #000;
+  animation: holo-blink 1s steps(1) infinite;
+  padding: 0 2px;
+}
+
+@keyframes holo-blink {
+  50% { opacity: 0; }
+}
+
+/* Inputs */
+html.theme-holo .composer {
+  border-top: 1px solid var(--border);
+  background: #070707;
+}
+
+html.theme-holo .composer textarea {
+  background: #050505;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--text);
+  caret-color: var(--accent);
+  font-family: inherit;
+}
+
+html.theme-holo .composer textarea:focus {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(51, 255, 102, 0.3);
+}
+
+html.theme-holo .inline-form input,
+html.theme-holo .git-commit-box input,
+html.theme-holo .git-branch-create input,
+html.theme-holo .processes-spawn input,
+html.theme-holo .tasks-create input,
+html.theme-holo .transcript-search {
+  background: #050505;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--text);
+  font-family: inherit;
+  caret-color: var(--accent);
+}
+
+html.theme-holo .session-control {
+  background: #050505;
+  border: 1px solid var(--border);
+  border-radius: 0;
+}
+
+/* Panels */
+html.theme-holo .settings-section,
+html.theme-holo .process-card,
+html.theme-holo .task-row,
+html.theme-holo .files-tree-pane,
+html.theme-holo .git-changes-list,
+html.theme-holo .terminal-container,
+html.theme-holo .palette {
+  border-radius: 0;
+  background: #080808;
+}
+
+html.theme-holo .settings-section h2::before {
+  content: "## ";
+  color: var(--accent);
+}
+
+html.theme-holo .settings-section h2 {
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Status bar = BIOS line */
+html.theme-holo .statusbar {
+  background: #070707;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+html.theme-holo .statusbar .conn-open {
+  color: var(--accent);
+  text-shadow: 0 0 8px rgba(51, 255, 102, 0.5);
+}
+
+html.theme-holo .statusbar-item::before {
+  content: "❯ ";
+}
+
+/* Status dots */
+html.theme-holo .status-running {
+  color: var(--accent);
+  text-shadow: 0 0 8px rgba(51, 255, 102, 0.6);
+}
+
+html.theme-holo .status-waiting,
+html.theme-holo .status-starting {
+  color: var(--warn);
+}
+
+html.theme-holo .status-error {
+  color: var(--danger);
+}
+
+/* Terminal tabs = tty windows */
+html.theme-holo .terminal-tabs {
+  background: #070707;
+}
+
+html.theme-holo .terminal-tab {
+  border: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--text-dim);
+}
+
+html.theme-holo .terminal-tab.active {
+  background: rgba(51, 255, 102, 0.12);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Session badge = status tag */
+html.theme-holo .session-badge {
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 0;
+  letter-spacing: 0.1em;
+}
+
+/* Palette */
+html.theme-holo .palette {
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 30px rgba(51, 255, 102, 0.15);
+}
+
+html.theme-holo .palette input {
+  background: #050505;
+  border-bottom: 1px solid var(--border);
+  font-family: inherit;
+  caret-color: var(--accent);
+}
+
+html.theme-holo .palette-item:hover {
+  background: var(--accent);
+  color: #000;
+}
+
+html.theme-holo .palette-item:hover .palette-category {
+  color: #000;
+}
+
+html.theme-holo .palette-category {
+  color: var(--accent);
+}
+
+/* Git */
+html.theme-holo .git-diff-toolbar .active,
+html.theme-holo .task-controls .active {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+}
+
+html.theme-holo .git-log-hash {
+  color: var(--accent);
+}
+
+/* Scrollbars */
+html.theme-holo ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+html.theme-holo ::-webkit-scrollbar-thumb {
+  background: #12301a;
+  border-radius: 0;
+}
+
+html.theme-holo ::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-dim);
+}

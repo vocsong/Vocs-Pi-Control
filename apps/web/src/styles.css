@@ -1691,3 +1691,32 @@ body {
 .conn-closed {
   color: var(--danger);
 }
+
+/* Theme switcher */
+.theme-switcher {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.theme-switcher-btn {
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-dim);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.theme-switcher-btn:hover {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+
+.theme-switcher-btn.active {
+  color: var(--accent);
+  border-color: var(--accent);
+}

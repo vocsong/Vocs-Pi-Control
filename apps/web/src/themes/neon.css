@@ -1,0 +1,329 @@
+/* ============================================================
+   NEON // CYBERPULSE — synthwave grid, electric glows, dark chrome
+   ============================================================ */
+
+html.theme-neon {
+  --bg: #04050d;
+  --bg-raised: #0a0d1f;
+  --bg-input: #10152e;
+  --border: #1c2550;
+  --text: #e8f0ff;
+  --text-dim: #8590c0;
+  --accent: #00f0ff;
+  --accent-dim: rgba(0, 240, 255, 0.22);
+  --danger: #ff2ec4;
+  --ok: #39ff14;
+  --warn: #ffd60a;
+  --radius: 8px;
+  font-family: "Rajdhani", system-ui, sans-serif;
+  letter-spacing: 0.02em;
+}
+
+html.theme-neon body {
+  font-family: "Rajdhani", system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 80% -10%, rgba(0, 240, 255, 0.07), transparent 60%),
+    radial-gradient(900px 500px at 10% 110%, rgba(255, 46, 196, 0.06), transparent 60%),
+    #04050d;
+}
+
+/* Persistent synthwave grid */
+html.theme-neon body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(0, 240, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.05) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse at 50% 0%, black 30%, transparent 85%);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 0%, black 30%, transparent 85%);
+}
+
+html.theme-neon .app-header {
+  border-bottom: 1px solid transparent;
+  background: linear-gradient(180deg, #0c1026, #090c1d);
+  position: relative;
+}
+
+/* animated neon hairline under the header */
+html.theme-neon .app-header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), var(--danger), var(--accent), transparent);
+  background-size: 200% 100%;
+  animation: neon-slide 6s linear infinite;
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.6);
+}
+
+@keyframes neon-slide {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+html.theme-neon .app-logo {
+  color: var(--accent);
+  text-shadow: 0 0 10px var(--accent), 0 0 24px rgba(0, 240, 255, 0.5);
+  animation: neon-pulse 2.4s ease-in-out infinite;
+}
+
+html.theme-neon .app-title {
+  font-family: "Orbitron", sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text);
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.45);
+}
+
+@keyframes neon-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.35); }
+}
+
+/* Panels */
+html.theme-neon .sidebar,
+html.theme-neon .settings-section,
+html.theme-neon .process-card,
+html.theme-neon .task-row,
+html.theme-neon .msg-tool,
+html.theme-neon .git-diff,
+html.theme-neon .terminal-container,
+html.theme-neon .files-tree-pane,
+html.theme-neon .git-changes-list,
+html.theme-neon .palette,
+html.theme-neon .composer,
+html.theme-neon .session-header,
+html.theme-neon .trace-header,
+html.theme-neon .files-editor-header {
+  background: rgba(10, 13, 31, 0.85);
+}
+
+html.theme-neon .sidebar {
+  border-right: 1px solid var(--border);
+  box-shadow: inset -1px 0 0 rgba(0, 240, 255, 0.08);
+}
+
+html.theme-neon .sidebar-section-header {
+  font-family: "Orbitron", sans-serif;
+  font-weight: 600;
+  color: var(--accent);
+  text-shadow: 0 0 6px rgba(0, 240, 255, 0.4);
+}
+
+/* Rows: active gets a neon rail */
+html.theme-neon .project-main,
+html.theme-neon .session-item {
+  border-radius: 4px;
+}
+
+html.theme-neon .workspace-row-item.active .project-main,
+html.theme-neon .session-item.active {
+  background: linear-gradient(90deg, rgba(0, 240, 255, 0.16), rgba(0, 240, 255, 0.03));
+  border-color: rgba(0, 240, 255, 0.5);
+  box-shadow: inset 2px 0 0 var(--accent), 0 0 12px rgba(0, 240, 255, 0.15);
+}
+
+/* Buttons */
+html.theme-neon .btn {
+  border-color: var(--border);
+  background: linear-gradient(180deg, #121936, #0c1128);
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-family: "Rajdhani", sans-serif;
+  font-weight: 600;
+  border-radius: 4px;
+  transition: box-shadow 0.15s ease, transform 0.1s ease;
+}
+
+html.theme-neon .btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.35), inset 0 0 8px rgba(0, 240, 255, 0.12);
+}
+
+html.theme-neon .btn-primary {
+  background: linear-gradient(90deg, #00c2d4, #00f0ff);
+  border-color: #00f0ff;
+  color: #04050d;
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.45);
+}
+
+html.theme-neon .btn-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+  text-shadow: 0 0 6px rgba(255, 46, 196, 0.6);
+}
+
+html.theme-neon .btn-icon:hover:not(:disabled) {
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
+}
+
+/* Tabs */
+html.theme-neon .tabbar {
+  background: #080b1a;
+  border-bottom: 1px solid var(--border);
+}
+
+html.theme-neon .tab {
+  font-family: "Orbitron", sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+}
+
+html.theme-neon .tab.active {
+  color: var(--accent);
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+  border-bottom-color: var(--accent);
+}
+
+/* Chat */
+html.theme-neon .msg-user {
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.28), rgba(0, 240, 255, 0.1));
+  border: 1px solid rgba(0, 240, 255, 0.5);
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.2);
+  border-radius: 4px 14px 4px 14px;
+}
+
+html.theme-neon .msg-assistant {
+  border-left: 2px solid var(--accent);
+  padding-left: 12px;
+  box-shadow: inset 0 0 24px rgba(0, 240, 255, 0.03);
+}
+
+html.theme-neon .msg-role {
+  font-family: "Orbitron", sans-serif;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+}
+
+html.theme-neon .msg-thinking {
+  border-left-color: var(--danger);
+}
+
+html.theme-neon .msg-thinking .msg-role {
+  color: var(--danger);
+}
+
+html.theme-neon .msg-tool {
+  border-color: rgba(255, 46, 196, 0.4);
+  box-shadow: 0 0 12px rgba(255, 46, 196, 0.08);
+}
+
+html.theme-neon .tool-input pre,
+html.theme-neon .tool-output {
+  background: #070a18;
+  border: 1px solid #141b38;
+}
+
+/* Status dots with glow */
+html.theme-neon .status-running {
+  text-shadow: 0 0 8px var(--ok);
+  animation: neon-pulse 1.6s ease-in-out infinite;
+}
+
+html.theme-neon .status-waiting,
+html.theme-neon .status-starting {
+  text-shadow: 0 0 8px var(--warn);
+}
+
+html.theme-neon .status-error {
+  text-shadow: 0 0 8px var(--danger);
+}
+
+/* Composer */
+html.theme-neon .composer {
+  border-top: 1px solid var(--border);
+}
+
+html.theme-neon .composer textarea {
+  background: #080b1a;
+  border: 1px solid #1c2550;
+  caret-color: var(--accent);
+  font-family: "Share Tech Mono", monospace;
+}
+
+html.theme-neon .composer textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.2);
+}
+
+/* Terminal */
+html.theme-neon .terminal-tabs {
+  background: #080b1a;
+}
+
+html.theme-neon .terminal-tab {
+  background: #0c1128;
+  border-color: #1c2550;
+  color: var(--text-dim);
+}
+
+html.theme-neon .terminal-tab.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 -2px 10px rgba(0, 240, 255, 0.15);
+}
+
+/* Git / files */
+html.theme-neon .git-diff-toolbar .active,
+html.theme-neon .task-controls .active {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
+}
+
+html.theme-neon .git-branch-label,
+html.theme-neon .trace-time {
+  font-family: "Share Tech Mono", monospace;
+}
+
+html.theme-neon .session-badge {
+  border-color: rgba(0, 240, 255, 0.5);
+  color: var(--accent);
+  font-family: "Share Tech Mono", monospace;
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 6px rgba(0, 240, 255, 0.5);
+}
+
+/* Sandbox panel */
+html.theme-neon .sandbox-panel {
+  border-top: 1px solid var(--border);
+}
+
+html.theme-neon .sandbox-dot.ok {
+  text-shadow: 0 0 8px var(--ok);
+}
+
+/* Palette */
+html.theme-neon .palette {
+  border-color: var(--accent);
+  box-shadow: 0 0 40px rgba(0, 240, 255, 0.25), 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+
+html.theme-neon .palette input {
+  font-family: "Share Tech Mono", monospace;
+  background: #080b1a;
+}
+
+/* Scrollbars */
+html.theme-neon ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+html.theme-neon ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #1c2550, #2b3a7a);
+  border-radius: 5px;
+}
+
+html.theme-neon ::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-dim);
+}

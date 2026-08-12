@@ -12,6 +12,7 @@ import { TasksView } from "./components/TasksView";
 import { SettingsView } from "./components/SettingsView";
 import { TraceView } from "./components/TraceView";
 import { CommandPalette, QuickOpen, type CommandItem } from "./components/CommandPalette";
+import { ThemeSwitcher } from "./components/ThemeSwitcher";
 import { StatusBar } from "./components/StatusBar";
 
 type Tab = "chat" | "files" | "git" | "terminal" | "processes" | "tasks" | "trace" | "settings";
@@ -206,6 +207,7 @@ export function App() {
         <span className="app-shortcuts">
           <kbd>Ctrl K</kbd> palette · <kbd>Ctrl P</kbd> files
         </span>
+        <ThemeSwitcher />
         <button className="btn btn-icon" title="Settings: providers, models, defaults" onClick={() => setTab("settings")}>
           ⚙
         </button>
