@@ -128,14 +128,14 @@ function WorkspaceRow({ workspace }: { workspace: WorkspaceInfo }) {
         <span className="project-actions">
           {running ? (
             <button className="btn btn-icon btn-icon-round" title="Stop" disabled={disabled} onClick={() => void act(() => stopWorkspaceFlow(workspace.id))}>
-              {/* 13px square — optically matches the 12px triangle. */}
-              <svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true">
+              {/* 12px square — intentionally 1px smaller than play. */}
+              <svg width="12" height="12" viewBox="0 0 13 13" aria-hidden="true">
                 <rect x="2" y="2" width="9" height="9" rx="1.5" fill="currentColor" />
               </svg>
             </button>
           ) : (
             <button className="btn btn-icon btn-icon-round" title="Start" disabled={disabled} onClick={() => void act(() => startWorkspaceFlow(workspace.id))}>
-              <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+              <svg width="13" height="13" viewBox="0 0 12 12" aria-hidden="true">
                 <path d="M3 1.5l7.5 4.5L3 10.5z" fill="currentColor" />
               </svg>
             </button>
