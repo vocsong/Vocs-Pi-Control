@@ -49,6 +49,11 @@ body {
   border-bottom: 1px solid var(--border);
   background: var(--bg-raised);
   flex: none;
+  /* Paint above the tabbar/panels so header dropdowns (theme menu) are
+     always clickable — backdrop-filter themes create sibling stacking
+     contexts where later DOM order would otherwise win. */
+  position: relative;
+  z-index: 300;
 }
 
 .app-logo {
