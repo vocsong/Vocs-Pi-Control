@@ -180,6 +180,13 @@ body {
   line-height: 1;
 }
 
+/* The play triangle (U+25B6) renders optically larger than the square
+   and arrow glyphs at the same size; shrink it slightly so the three
+   row action icons look balanced. */
+.btn-icon-play {
+  font-size: 10px;
+}
+
 /* Inline forms */
 .inline-form {
   display: flex;

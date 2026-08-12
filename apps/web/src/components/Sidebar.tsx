@@ -131,12 +131,7 @@ function WorkspaceRow({ workspace }: { workspace: WorkspaceInfo }) {
               ■
             </button>
           ) : (
-            <button
-              className="btn btn-icon"
-              title="Start"
-              disabled={disabled}
-              onClick={() => void act(() => startWorkspaceFlow(workspace.id))}
-            >
+            <button className="btn btn-icon btn-icon-play" title="Start" disabled={disabled} onClick={() => void act(() => startWorkspaceFlow(workspace.id))}>
               ▶
             </button>
           )}
