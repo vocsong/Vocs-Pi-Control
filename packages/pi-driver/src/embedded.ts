@@ -28,6 +28,15 @@ import {
 } from "./index.js";
 import { newId } from "@pi-control/shared";
 
+/** Best-effort JSON.parse for tool args delivered as strings. */
+function safeParseJson(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
 export interface EmbeddedPiDriverOptions {
   /** Working directory for Pi (the workspace mount). */
   cwd?: string;
@@ -430,11 +439,12 @@ export class EmbeddedPiDriver implements PiSessionDriver {
       case "tool_execution_start": {
         const toolCallId = (event as { toolCallId?: string }).toolCallId ?? newId("tool");
         managed.currentToolId = toolCallId;
+        const rawArgs = (event as { args?: unknown }).args;
         this.emit(sessionId, {
           type: "tool.start",
           toolCallId,
           name: event.toolName,
-          input: (event as { input?: unknown }).input,
+          input: rawArgs === undefined ? undefined : typeof rawArgs === "string" ? safeParseJson(rawArgs) ?? rawArgs : rawArgs,
         });
         return;
       }

@@ -265,10 +265,10 @@ export function ProcessesView() {
           onKeyDown={(e) => e.key === "Enter" && void spawn()}
         />
         <input
-          placeholder="Port (43100-43119)"
+          placeholder={`Port (${sandbox.devHostStart ?? 43100}-${sandbox.devHostEnd ?? 43119})`}
           value={port}
           onChange={(e) => setPort(e.target.value)}
-          title="Ports in 43100-43119 are exposed on host loopback"
+          title={`Ports ${sandbox.devHostStart ?? 43100}-${sandbox.devHostEnd ?? 43119} are exposed on host loopback`}
         />
         <button className="btn btn-small btn-primary" disabled={busy || !command.trim()} onClick={() => void spawn()}>
           Run

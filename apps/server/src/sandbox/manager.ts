@@ -89,9 +89,23 @@ export const AGENT_CONTAINER_PORT = 4175;
 /**
  * Loopback-only dev-port range published for every sandbox: dev servers
  * started inside the sandbox on these ports are reachable at
- * http://127.0.0.1:<port> on the host (plan §16.2).
+ * http://127.0.0.1:<port> on the host (plan §16.2). Container ports stay
+ * in DEV_PORT_RANGE; the HOST side shifts by a per-sandbox slot so
+ * multiple sandboxes can run at once without colliding.
  */
 export const DEV_PORT_RANGE = { hostStart: 43100, containerStart: 43100, count: 20 };
+
+/** Number of per-sandbox host-side slots over the dev range. */
+export const DEV_PORT_SLOTS = 10;
+
+/** Host-side range for a slot: container ports 43100–43119, host shifted by slot. */
+export function devRangeForSlot(slot: number): { hostStart: number; containerStart: number; count: number } {
+  return {
+    hostStart: DEV_PORT_RANGE.hostStart + slot * DEV_PORT_RANGE.count,
+    containerStart: DEV_PORT_RANGE.containerStart,
+    count: DEV_PORT_RANGE.count,
+  };
+}
 
 /** Environment profile → image reference (plan §11). */
 export function imageForProfile(profile: "node" | "python" | "universal"): string {
@@ -368,6 +382,11 @@ export class SandboxManager {
     const agentToken = crypto.randomBytes(32).toString("hex");
     const agentHostPort = await allocateAgentHostPort();
 
+    // Per-sandbox dev-range slot: container ports 43100–43119, host side
+    // shifted so concurrent sandboxes never collide on the loopback.
+    const devSlot = this.allocateDevSlot(sandboxId);
+    const devRange = devRangeForSlot(devSlot);
+
     const spec: CreateWorkspaceSandboxSpec = {
       workspaceId: sandboxId,
       containerName,
@@ -385,7 +404,8 @@ export class SandboxManager {
       },
       securityProfile: input.securityProfile ?? "standard",
       ports: [{ hostPort: agentHostPort, containerPort: AGENT_CONTAINER_PORT }],
-      portRanges: [DEV_PORT_RANGE],
+      portRanges: [devRange],
+      devHostStart: devRange.hostStart,
       environment: {
         PI_CODING_AGENT_DIR: "/state/pi-agent",
         PI_CODING_AGENT_SESSION_DIR: "/state/pi-sessions",
@@ -516,6 +536,12 @@ export class SandboxManager {
       spec.imageRef = imageForProfile(profile);
       await this.ensureProfileImage(profile);
     }
+
+    // Re-slot the dev range so a rebuild never collides with another
+    // running sandbox holding the same host range.
+    const devRange = devRangeForSlot(this.allocateDevSlot(sandboxId));
+    spec.devHostStart = devRange.hostStart;
+    spec.portRanges = [devRange];
 
     this.options.agents.disconnect(sandboxId);
     this.setSandboxState(sandboxId, "building");
@@ -715,6 +741,38 @@ export class SandboxManager {
     this.options.agents.connect(sandboxId, endpoint);
   }
 
+  /** Lowest free dev slot across all sandboxes (excluding the given one). */
+  private allocateDevSlot(excludingSandboxId: string): number {
+    const rows = this.options.db.select().from(schema.sandboxes).all();
+    const used = new Set<number>();
+    for (const row of rows) {
+      if (row.workspaceId === excludingSandboxId) continue;
+      const start = this.devHostStartOf(row.configJson);
+      if (start !== undefined) {
+        const slot = Math.round((start - DEV_PORT_RANGE.hostStart) / DEV_PORT_RANGE.count);
+        if (slot >= 0 && slot < DEV_PORT_SLOTS) used.add(slot);
+      }
+    }
+    for (let slot = 0; slot < DEV_PORT_SLOTS; slot++) {
+      if (!used.has(slot)) return slot;
+    }
+    throw new Error(
+      `No free dev-port slots (${DEV_PORT_SLOTS} max) — stop a sandbox to free its range`,
+    );
+  }
+
+  private devHostStartOf(configJson: string | null | undefined): number | undefined {
+    if (!configJson) return undefined;
+    try {
+      const spec = JSON.parse(configJson) as { devHostStart?: number };
+      return typeof spec.devHostStart === "number" && Number.isFinite(spec.devHostStart)
+        ? spec.devHostStart
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   private toSandboxInfo(
     row: {
       id: string;
@@ -741,6 +799,7 @@ export class SandboxManager {
       fallbackStatus ??
       (runtimeRow?.state as SandboxStatus | undefined) ??
       (row.archivedAt ? "missing" : row.sandboxId ? "stopped" : "missing");
+    const devHostStart = this.devHostStartOf(runtimeRow?.configJson);
     return {
       id: row.id,
       workspaceId: row.projectId,
@@ -752,6 +811,8 @@ export class SandboxManager {
       gitBranch: row.gitBranch ?? undefined,
       securityProfile: row.securityProfile as SandboxInfo["securityProfile"],
       status,
+      devHostStart,
+      devHostEnd: devHostStart === undefined ? undefined : devHostStart + DEV_PORT_RANGE.count - 1,
       createdAt: row.createdAt,
       archivedAt: row.archivedAt ?? undefined,
     };

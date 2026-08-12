@@ -1,7 +1,9 @@
 import { z } from "zod";
 import type { AppFastify } from "../types.js";
 import type { AgentManager } from "../agents/agentManager.js";
-import { DEV_PORT_RANGE } from "../sandbox/manager.js";
+import { DEV_PORT_RANGE, devRangeForSlot } from "../sandbox/manager.js";
+import { schema, type Db } from "@pi-control/database";
+import { eq } from "drizzle-orm";
 
 const openBody = z
   .object({ cols: z.number().int().min(2).max(500).optional(), rows: z.number().int().min(2).max(500).optional() })
@@ -13,7 +15,30 @@ const resizeBody = z
   .object({ cols: z.number().int().min(2).max(500), rows: z.number().int().min(2).max(500) })
   .strict();
 
-export function registerTerminalRoutes(app: AppFastify, agents: AgentManager): void {
+export function registerTerminalRoutes(app: AppFastify, agents: AgentManager, db: Db): void {
+  /** This sandbox's published host-side dev range (slot-aware, legacy = slot 0). */
+  function devRangeFor(sandboxId: string): { hostStart: number; containerStart: number; count: number } {
+    const row = db
+      .select()
+      .from(schema.sandboxes)
+      .where(eq(schema.sandboxes.workspaceId, sandboxId))
+      .get();
+    let slot = 0;
+    if (row?.configJson) {
+      try {
+        const spec = JSON.parse(row.configJson) as { devHostStart?: number };
+        const start = spec.devHostStart;
+        if (typeof start === "number" && Number.isFinite(start)) {
+          slot = Math.round((start - DEV_PORT_RANGE.hostStart) / DEV_PORT_RANGE.count);
+          if (slot < 0 || slot >= 10) slot = 0;
+        }
+      } catch {
+        /* malformed config → legacy slot 0 */
+      }
+    }
+    return devRangeForSlot(slot);
+  }
+
   app.get("/api/sandboxes/:sandboxId/terminals", async (request, reply) => {
     const { sandboxId } = request.params as { sandboxId: string };
     try {
@@ -71,11 +96,15 @@ export function registerTerminalRoutes(app: AppFastify, agents: AgentManager): v
     const { sandboxId } = request.params as { sandboxId: string };
     try {
       const ports = await agents.listPorts(sandboxId);
-      // Map listening container ports to host URLs within the published
-      // dev range (loopback only).
+      // Map listening container ports to host URLs within this sandbox's
+      // published dev range (loopback only, slot-aware).
+      const range = devRangeFor(sandboxId);
       const exposed = ports
-        .filter((p) => p.port >= DEV_PORT_RANGE.hostStart && p.port <= DEV_PORT_RANGE.hostStart + DEV_PORT_RANGE.count - 1)
-        .map((p) => ({ containerPort: p.port, url: `http://127.0.0.1:${p.port}` }));
+        .filter((p) => p.port >= range.containerStart && p.port < range.containerStart + range.count)
+        .map((p) => ({
+          containerPort: p.port,
+          url: `http://127.0.0.1:${range.hostStart + (p.port - range.containerStart)}`,
+        }));
       return { ports: exposed };
     } catch (error) {
       return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });

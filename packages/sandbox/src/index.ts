@@ -72,6 +72,8 @@ export interface CreateWorkspaceSandboxSpec {
   ports?: { hostPort: number; containerPort: number }[];
   /** Loopback-only port RANGES (dev-server exposure, plan §16.2). */
   portRanges?: { hostStart: number; containerStart: number; count: number }[];
+  /** Host loopback start of this sandbox's published dev range (slot). */
+  devHostStart?: number;
   environment?: Record<string, string>;
 }
 

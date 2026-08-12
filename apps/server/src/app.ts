@@ -54,7 +54,7 @@ export async function buildApp(deps: AppDeps): Promise<AppFastify> {
   registerSandboxRoutes(app, deps.sandbox);
   registerFileRoutes(app, deps.agents);
   registerGitRoutes(app, deps.agents, deps.worktrees);
-  registerTerminalRoutes(app, deps.agents);
+  registerTerminalRoutes(app, deps.agents, deps.db);
   registerTaskRoutes(app, deps.db, deps.hub);
   registerRealtime(app, deps);
 

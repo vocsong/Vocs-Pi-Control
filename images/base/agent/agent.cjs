@@ -4574,6 +4574,13 @@ var MockPiDriver = class {
 var import_node_fs = __toESM(require("node:fs"), 1);
 var import_node_url = require("node:url");
 var import_node_path = __toESM(require("node:path"), 1);
+function safeParseJson(value) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
 var PI_PACKAGE = "@earendil-works/pi-coding-agent";
 async function importPi() {
   if (typeof __dirname !== "string") {
@@ -4872,11 +4879,12 @@ var EmbeddedPiDriver = class {
       case "tool_execution_start": {
         const toolCallId = event.toolCallId ?? newId("tool");
         managed.currentToolId = toolCallId;
+        const rawArgs = event.args;
         this.emit(sessionId, {
           type: "tool.start",
           toolCallId,
           name: event.toolName,
-          input: event.input
+          input: rawArgs === void 0 ? void 0 : typeof rawArgs === "string" ? safeParseJson(rawArgs) ?? rawArgs : rawArgs
         });
         return;
       }

@@ -255,6 +255,10 @@ export interface SandboxInfo {
   gitBranch?: string;
   securityProfile: "standard" | "restricted" | "trusted";
   status: SandboxStatus;
+  /** Host loopback start of this sandbox's published dev-port range. */
+  devHostStart?: number;
+  /** Host loopback end (inclusive) of the published dev-port range. */
+  devHostEnd?: number;
   createdAt: string;
   archivedAt?: string;
 }
