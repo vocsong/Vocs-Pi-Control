@@ -127,7 +127,7 @@ function WorkspaceRow({ workspace }: { workspace: WorkspaceInfo }) {
         </button>
         <span className="project-actions">
           {running ? (
-            <button className="btn btn-icon" title="Stop" disabled={disabled} onClick={() => void act(() => stopWorkspaceFlow(workspace.id))}>
+            <button className="btn btn-icon btn-icon-stop" title="Stop" disabled={disabled} onClick={() => void act(() => stopWorkspaceFlow(workspace.id))}>
               ■
             </button>
           ) : (

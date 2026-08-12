@@ -181,10 +181,19 @@ body {
 }
 
 /* The play triangle (U+25B6) renders optically larger than the square
-   and arrow glyphs at the same size; shrink it slightly so the three
-   row action icons look balanced. */
+   and arrow glyphs at the same size; balance the three row icons:
+   triangle 1px smaller, square 1px bigger (issue: uneven icon sizes). */
 .btn-icon-play {
-  font-size: 10px;
+  font-size: 9px;
+}
+
+.btn-icon-stop {
+  font-size: 13px;
+}
+
+/* The start/stop/rebuild row actions are round instead of rectangular. */
+.project-actions .btn-icon {
+  border-radius: 50%;
 }
 
 /* Inline forms */
