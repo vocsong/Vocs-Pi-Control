@@ -23,9 +23,12 @@ export const THEMES: ThemeInfo[] = [
 
 const STORAGE_KEY = "pi-control.theme";
 
+/** Default theme for new visitors. */
+export const DEFAULT_THEME: ThemeId = "glass";
+
 export function getStoredTheme(): ThemeId {
   const value = localStorage.getItem(STORAGE_KEY);
-  return THEMES.some((t) => t.id === value) ? (value as ThemeId) : "default";
+  return THEMES.some((t) => t.id === value) ? (value as ThemeId) : DEFAULT_THEME;
 }
 
 export function applyTheme(themeId: ThemeId): void {

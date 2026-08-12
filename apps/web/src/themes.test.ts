@@ -46,8 +46,8 @@ describe("themes", () => {
     }
   });
 
-  it("defaults to the core theme when nothing is stored", () => {
-    expect(getStoredTheme()).toBe("default");
+  it("defaults to the glass theme when nothing is stored", () => {
+    expect(getStoredTheme()).toBe("glass");
   });
 
   it("persists and applies a selected theme", () => {
@@ -69,9 +69,9 @@ describe("themes", () => {
     expect(fakeRoot.attributes["data-theme"]).toBe("holo");
   });
 
-  it("ignores unknown stored values", () => {
+  it("ignores unknown stored values and falls back to glass", () => {
     storage.set("pi-control.theme", "hotdog");
-    expect(getStoredTheme()).toBe("default");
+    expect(getStoredTheme()).toBe("glass");
   });
 
   it("reports the current theme", () => {
