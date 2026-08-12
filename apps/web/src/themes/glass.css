@@ -124,16 +124,32 @@ html.theme-glass .btn-danger {
 }
 
 html.theme-glass .tabbar {
-  border-bottom: none;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  margin: 10px 10px 6px;
+  border-radius: 16px;
+  padding: 3px;
 }
 
 html.theme-glass .tab {
-  border-radius: 10px;
-  margin: 6px 2px;
-  padding: 6px 14px;
+  border-radius: 12px;
+  margin: 2px;
+  padding: 7px 16px;
   border-bottom: none;
   font-weight: 600;
   letter-spacing: 0.08em;
+}
+
+/* Floating session header + breathing room for the chat area */
+html.theme-glass .session-header {
+  margin: 0 10px 6px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+html.theme-glass .messages {
+  padding: 14px 20px;
 }
 
 html.theme-glass .tab.active {

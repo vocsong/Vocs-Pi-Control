@@ -533,6 +533,15 @@ body {
   max-width: 220px;
 }
 
+/* Native select popups (model picker, thinking level, …) ignore the
+   box's background — style the options with the solid theme surface so
+   the expanded list stays readable in every theme (glass's translucent
+   raised color would otherwise render near-white). */
+select option {
+  background: var(--bg);
+  color: var(--text);
+}
+
 .caps-popover {
   border-bottom: 1px solid var(--border);
   background: var(--bg-raised);
