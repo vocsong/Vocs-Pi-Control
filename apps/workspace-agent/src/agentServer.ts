@@ -303,6 +303,14 @@ export async function startAgentServer(options: AgentServerOptions): Promise<Age
           socket.send(JSON.stringify({ type: "agent.session.models", payload: { models, commandId: command.id } } satisfies AgentEvent));
           return;
         }
+        case "agent.session.transcript": {
+          const request = command.payload as { sessionId: string; nativeSessionPath?: string; nativePiSessionId?: string };
+          const messages = await sessionSupervisor.transcript(request.sessionId, request.nativeSessionPath, request.nativePiSessionId);
+          socket.send(
+            JSON.stringify({ type: "agent.session.transcript", payload: { sessionId: request.sessionId, messages, commandId: command.id } } satisfies AgentEvent),
+          );
+          return;
+        }
         case "agent.file.list": {
           const request = command.payload as { path?: string };
           const entries = await files.list(request.path ?? "");

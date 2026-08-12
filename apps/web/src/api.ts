@@ -175,6 +175,15 @@ export const api = {
   compactSession: (sessionId: string) =>
     json<{ ok: boolean }>(`/api/sessions/${sessionId}/compact`, { method: "POST" }),
 
+  sessionTranscript: (sessionId: string) =>
+    json<{ messages: Array<{
+      role: "user" | "assistant" | "tool";
+      text?: string;
+      thinking?: string;
+      toolName?: string;
+      output?: string;
+    }> }>(`/api/sessions/${sessionId}/transcript`),
+
   listTasks: (sandboxId: string) =>
     json<{ tasks: import("@pi-control/protocol").TaskInfo[] }>(`/api/sandboxes/${sandboxId}/tasks`),
 

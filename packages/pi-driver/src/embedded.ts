@@ -24,6 +24,7 @@ import {
   type PiSessionHandle,
   type PiSessionSnapshot,
   type PromptInput,
+  type TranscriptMessage,
 } from "./index.js";
 import { newId } from "@pi-control/shared";
 
@@ -308,6 +309,11 @@ export class EmbeddedPiDriver implements PiSessionDriver {
     };
   }
 
+  async readTranscript(sessionId: string) {
+    const managed = this.require(sessionId);
+    return mapMessages(managed.session.messages as unknown as Array<Record<string, unknown>>);
+  }
+
   async listModels() {
     const pi = await this.piModule();
     if (!this.modelRuntime) return [];
@@ -463,4 +469,44 @@ export class EmbeddedPiDriver implements PiSessionDriver {
         return;
     }
   }
+}
+
+/** Map native Pi AgentMessages to display-oriented TranscriptMessages. */
+function mapMessages(messages: Array<Record<string, unknown>>): TranscriptMessage[] {
+  const out: TranscriptMessage[] = [];
+  for (const message of messages) {
+    const role = String(message.role ?? "");
+    const content = (message.content ?? []) as Array<Record<string, unknown>>;
+    const textParts: string[] = [];
+    const thinkingParts: string[] = [];
+    for (const item of content) {
+      const type = String(item.type ?? "");
+      if (type === "text" && typeof item.text === "string") textParts.push(item.text);
+      else if (type === "thinking" && typeof item.thinking === "string") thinkingParts.push(item.thinking);
+    }
+    const toolName = typeof message.toolName === "string" ? message.toolName : undefined;
+    if (role === "user") {
+      out.push({ role: "user", text: textParts.join("\n"), timestamp: stringOr(message.timestamp) });
+    } else if (role === "assistant") {
+      out.push({
+        role: "assistant",
+        text: textParts.join("\n") || undefined,
+        thinking: thinkingParts.join("\n") || undefined,
+        timestamp: stringOr(message.timestamp),
+      });
+    } else if (role === "toolResult" || role === "tool") {
+      out.push({
+        role: "tool",
+        toolName,
+        toolCallId: typeof message.toolCallId === "string" ? message.toolCallId : undefined,
+        output: textParts.join("\n") || undefined,
+        timestamp: stringOr(message.timestamp),
+      });
+    }
+  }
+  return out;
+}
+
+function stringOr(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
 }

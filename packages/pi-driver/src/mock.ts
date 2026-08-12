@@ -196,6 +196,14 @@ export class MockPiDriver implements PiSessionDriver {
     return [{ provider: "mock", id: "mock-model" }];
   }
 
+  async readTranscript(sessionId: string) {
+    const session = this.require(sessionId);
+    return [
+      { role: "user" as const, text: "Mock conversation history", timestamp: new Date().toISOString() },
+      { role: "assistant" as const, text: `This session (${session.handle.id.slice(0, 8)}) used the mock driver; no real history exists.`, timestamp: new Date().toISOString() },
+    ];
+  }
+
   subscribe(sessionId: string, listener: PiDriverEventListener): () => void {
     const session = this.require(sessionId);
     session.listeners.add(listener);

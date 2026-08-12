@@ -38,6 +38,7 @@ export const AGENT_COMMAND_TYPES = [
   "agent.session.list",
   "agent.session.info",
   "agent.session.models",
+  "agent.session.transcript",
   "agent.file.list",
   "agent.file.read",
   "agent.file.write",
@@ -357,6 +358,7 @@ export const AGENT_EVENT_TYPES = [
   "agent.session.list",
   "agent.session.info",
   "agent.session.models",
+  "agent.session.transcript",
   "agent.file.list",
   "agent.file.read",
   "agent.file.ok",
@@ -501,6 +503,35 @@ export interface AgentSessionInfoPayload {
 
 export interface AgentSessionModelsPayload {
   models: Array<{ provider: string; id: string }>;
+  commandId?: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* Transcript (native Pi session read-back, ADR-0005)                  */
+/* ------------------------------------------------------------------ */
+
+export interface TranscriptMessage {
+  role: "user" | "assistant" | "tool";
+  text?: string;
+  thinking?: string;
+  toolName?: string;
+  toolCallId?: string;
+  input?: unknown;
+  output?: string;
+  timestamp?: string;
+}
+
+export interface AgentTranscriptRequest {
+  sessionId: string;
+  /** Native session path — used when the session is not live (re-open + read). */
+  nativeSessionPath?: string;
+  /** Native session id — the agent locates the file by name when no path is stored. */
+  nativePiSessionId?: string;
+}
+
+export interface AgentTranscriptPayload {
+  sessionId: string;
+  messages: TranscriptMessage[];
   commandId?: string;
 }
 

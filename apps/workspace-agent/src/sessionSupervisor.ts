@@ -5,6 +5,8 @@
  * server as `agent.session.event`.
  */
 
+import fs from "node:fs";
+import path from "node:path";
 import { type AgentSessionInfo, type EventEnvelopeInit } from "@pi-control/protocol";
 import {
   driverEventToEnvelope,
@@ -114,6 +116,29 @@ export class SessionSupervisor {
     return this.driver.getSessionInfo(this.require(sessionId));
   }
 
+  /**
+   * Read a session's history. Live sessions return their in-memory
+   * messages; otherwise the native session file is re-opened, read, and
+   * disposed (ADR-0005 — the native file is the source of truth).
+   */
+  async transcript(sessionId: string, nativeSessionPath?: string, nativePiSessionId?: string) {
+    const live = this.sessions.get(sessionId);
+    if (live) {
+      return this.driver.readTranscript(live.driverSessionId);
+    }
+    const path = nativeSessionPath ?? findNativeSessionFile(nativePiSessionId);
+    if (!path) {
+      throw new Error(`Session ${sessionId} is not live and its native session file could not be located`);
+    }
+    const tempId = `transcript_${crypto.randomUUID()}`;
+    const handle = await this.driver.resume(path);
+    try {
+      return await this.driver.readTranscript(handle.id);
+    } finally {
+      await this.driver.dispose(handle.id);
+    }
+  }
+
   async models() {
     return this.driver.listModels();
   }
@@ -150,4 +175,34 @@ export class SessionSupervisor {
     const envelope = driverEventToEnvelope(sessionId, event);
     this.events.onEvent(sessionId, envelope);
   }
+}
+
+/**
+ * Locate a native session file by session id. Pi names session files
+ * `<timestamp>_<sessionId>.jsonl` under the agent dir's sessions tree.
+ */
+function findNativeSessionFile(nativePiSessionId?: string): string | null {
+  if (!nativePiSessionId) return null;
+  const agentDir = process.env.PI_CODING_AGENT_DIR ?? "/state/pi-agent";
+  const sessionsRoot = path.join(agentDir, "sessions");
+  const stack = [sessionsRoot];
+  const pattern = `_${nativePiSessionId}.jsonl`;
+  while (stack.length > 0) {
+    const dir = stack.pop() as string;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(full);
+      } else if (entry.name.endsWith(pattern)) {
+        return full;
+      }
+    }
+  }
+  return null;
 }

@@ -3701,8 +3701,8 @@ var require_windows = __commonJS({
   "../../node_modules/.pnpm/isexe@2.0.0/node_modules/isexe/windows.js"(exports2, module2) {
     module2.exports = isexe;
     isexe.sync = sync;
-    var fs3 = require("fs");
-    function checkPathExt(path10, options) {
+    var fs4 = require("fs");
+    function checkPathExt(path11, options) {
       var pathext = options.pathExt !== void 0 ? options.pathExt : process.env.PATHEXT;
       if (!pathext) {
         return true;
@@ -3713,25 +3713,25 @@ var require_windows = __commonJS({
       }
       for (var i2 = 0; i2 < pathext.length; i2++) {
         var p = pathext[i2].toLowerCase();
-        if (p && path10.substr(-p.length).toLowerCase() === p) {
+        if (p && path11.substr(-p.length).toLowerCase() === p) {
           return true;
         }
       }
       return false;
     }
-    function checkStat(stat, path10, options) {
+    function checkStat(stat, path11, options) {
       if (!stat.isSymbolicLink() && !stat.isFile()) {
         return false;
       }
-      return checkPathExt(path10, options);
+      return checkPathExt(path11, options);
     }
-    function isexe(path10, options, cb) {
-      fs3.stat(path10, function(er, stat) {
-        cb(er, er ? false : checkStat(stat, path10, options));
+    function isexe(path11, options, cb) {
+      fs4.stat(path11, function(er, stat) {
+        cb(er, er ? false : checkStat(stat, path11, options));
       });
     }
-    function sync(path10, options) {
-      return checkStat(fs3.statSync(path10), path10, options);
+    function sync(path11, options) {
+      return checkStat(fs4.statSync(path11), path11, options);
     }
   }
 });
@@ -3741,14 +3741,14 @@ var require_mode = __commonJS({
   "../../node_modules/.pnpm/isexe@2.0.0/node_modules/isexe/mode.js"(exports2, module2) {
     module2.exports = isexe;
     isexe.sync = sync;
-    var fs3 = require("fs");
-    function isexe(path10, options, cb) {
-      fs3.stat(path10, function(er, stat) {
+    var fs4 = require("fs");
+    function isexe(path11, options, cb) {
+      fs4.stat(path11, function(er, stat) {
         cb(er, er ? false : checkStat(stat, options));
       });
     }
-    function sync(path10, options) {
-      return checkStat(fs3.statSync(path10), options);
+    function sync(path11, options) {
+      return checkStat(fs4.statSync(path11), options);
     }
     function checkStat(stat, options) {
       return stat.isFile() && checkMode(stat, options);
@@ -3772,7 +3772,7 @@ var require_mode = __commonJS({
 // ../../node_modules/.pnpm/isexe@2.0.0/node_modules/isexe/index.js
 var require_isexe = __commonJS({
   "../../node_modules/.pnpm/isexe@2.0.0/node_modules/isexe/index.js"(exports2, module2) {
-    var fs3 = require("fs");
+    var fs4 = require("fs");
     var core;
     if (process.platform === "win32" || global.TESTING_WINDOWS) {
       core = require_windows();
@@ -3781,7 +3781,7 @@ var require_isexe = __commonJS({
     }
     module2.exports = isexe;
     isexe.sync = sync;
-    function isexe(path10, options, cb) {
+    function isexe(path11, options, cb) {
       if (typeof options === "function") {
         cb = options;
         options = {};
@@ -3791,7 +3791,7 @@ var require_isexe = __commonJS({
           throw new TypeError("callback not provided");
         }
         return new Promise(function(resolve, reject) {
-          isexe(path10, options || {}, function(er, is) {
+          isexe(path11, options || {}, function(er, is) {
             if (er) {
               reject(er);
             } else {
@@ -3800,7 +3800,7 @@ var require_isexe = __commonJS({
           });
         });
       }
-      core(path10, options || {}, function(er, is) {
+      core(path11, options || {}, function(er, is) {
         if (er) {
           if (er.code === "EACCES" || options && options.ignoreErrors) {
             er = null;
@@ -3810,9 +3810,9 @@ var require_isexe = __commonJS({
         cb(er, is);
       });
     }
-    function sync(path10, options) {
+    function sync(path11, options) {
       try {
-        return core.sync(path10, options || {});
+        return core.sync(path11, options || {});
       } catch (er) {
         if (options && options.ignoreErrors || er.code === "EACCES") {
           return false;
@@ -3828,7 +3828,7 @@ var require_isexe = __commonJS({
 var require_which = __commonJS({
   "../../node_modules/.pnpm/which@2.0.2/node_modules/which/which.js"(exports2, module2) {
     var isWindows = process.platform === "win32" || process.env.OSTYPE === "cygwin" || process.env.OSTYPE === "msys";
-    var path10 = require("path");
+    var path11 = require("path");
     var COLON = isWindows ? ";" : ":";
     var isexe = require_isexe();
     var getNotFoundError = (cmd) => Object.assign(new Error(`not found: ${cmd}`), { code: "ENOENT" });
@@ -3866,7 +3866,7 @@ var require_which = __commonJS({
           return opt.all && found.length ? resolve(found) : reject(getNotFoundError(cmd));
         const ppRaw = pathEnv[i2];
         const pathPart = /^".*"$/.test(ppRaw) ? ppRaw.slice(1, -1) : ppRaw;
-        const pCmd = path10.join(pathPart, cmd);
+        const pCmd = path11.join(pathPart, cmd);
         const p = !pathPart && /^\.[\\\/]/.test(cmd) ? cmd.slice(0, 2) + pCmd : pCmd;
         resolve(subStep(p, i2, 0));
       });
@@ -3893,7 +3893,7 @@ var require_which = __commonJS({
       for (let i2 = 0; i2 < pathEnv.length; i2++) {
         const ppRaw = pathEnv[i2];
         const pathPart = /^".*"$/.test(ppRaw) ? ppRaw.slice(1, -1) : ppRaw;
-        const pCmd = path10.join(pathPart, cmd);
+        const pCmd = path11.join(pathPart, cmd);
         const p = !pathPart && /^\.[\\\/]/.test(cmd) ? cmd.slice(0, 2) + pCmd : pCmd;
         for (let j = 0; j < pathExt.length; j++) {
           const cur = p + pathExt[j];
@@ -3941,7 +3941,7 @@ var require_path_key = __commonJS({
 var require_resolveCommand = __commonJS({
   "../../node_modules/.pnpm/cross-spawn@7.0.6/node_modules/cross-spawn/lib/util/resolveCommand.js"(exports2, module2) {
     "use strict";
-    var path10 = require("path");
+    var path11 = require("path");
     var which = require_which();
     var getPathKey = require_path_key();
     function resolveCommandAttempt(parsed, withoutPathExt) {
@@ -3959,7 +3959,7 @@ var require_resolveCommand = __commonJS({
       try {
         resolved = which.sync(parsed.command, {
           path: env[getPathKey({ env })],
-          pathExt: withoutPathExt ? path10.delimiter : void 0
+          pathExt: withoutPathExt ? path11.delimiter : void 0
         });
       } catch (e) {
       } finally {
@@ -3968,7 +3968,7 @@ var require_resolveCommand = __commonJS({
         }
       }
       if (resolved) {
-        resolved = path10.resolve(hasCustomCwd ? parsed.options.cwd : "", resolved);
+        resolved = path11.resolve(hasCustomCwd ? parsed.options.cwd : "", resolved);
       }
       return resolved;
     }
@@ -4022,8 +4022,8 @@ var require_shebang_command = __commonJS({
       if (!match) {
         return null;
       }
-      const [path10, argument] = match[0].replace(/#! ?/, "").split(" ");
-      const binary = path10.split("/").pop();
+      const [path11, argument] = match[0].replace(/#! ?/, "").split(" ");
+      const binary = path11.split("/").pop();
       if (binary === "env") {
         return argument;
       }
@@ -4036,16 +4036,16 @@ var require_shebang_command = __commonJS({
 var require_readShebang = __commonJS({
   "../../node_modules/.pnpm/cross-spawn@7.0.6/node_modules/cross-spawn/lib/util/readShebang.js"(exports2, module2) {
     "use strict";
-    var fs3 = require("fs");
+    var fs4 = require("fs");
     var shebangCommand = require_shebang_command();
     function readShebang(command) {
       const size = 150;
       const buffer = Buffer.alloc(size);
       let fd;
       try {
-        fd = fs3.openSync(command, "r");
-        fs3.readSync(fd, buffer, 0, size, 0);
-        fs3.closeSync(fd);
+        fd = fs4.openSync(command, "r");
+        fs4.readSync(fd, buffer, 0, size, 0);
+        fs4.closeSync(fd);
       } catch (e) {
       }
       return shebangCommand(buffer.toString());
@@ -4058,7 +4058,7 @@ var require_readShebang = __commonJS({
 var require_parse = __commonJS({
   "../../node_modules/.pnpm/cross-spawn@7.0.6/node_modules/cross-spawn/lib/parse.js"(exports2, module2) {
     "use strict";
-    var path10 = require("path");
+    var path11 = require("path");
     var resolveCommand = require_resolveCommand();
     var escape = require_escape();
     var readShebang = require_readShebang();
@@ -4083,7 +4083,7 @@ var require_parse = __commonJS({
       const needsShell = !isExecutableRegExp.test(commandFile);
       if (parsed.options.forceShell || needsShell) {
         const needsDoubleEscapeMetaChars = isCmdShimRegExp.test(commandFile);
-        parsed.command = path10.normalize(parsed.command);
+        parsed.command = path11.normalize(parsed.command);
         parsed.command = escape.command(parsed.command);
         parsed.args = parsed.args.map((arg) => escape.argument(arg, needsDoubleEscapeMetaChars));
         const shellCommand = [parsed.command].concat(parsed.args).join(" ");
@@ -4243,6 +4243,7 @@ var AGENT_COMMAND_TYPES = [
   "agent.session.list",
   "agent.session.info",
   "agent.session.models",
+  "agent.session.transcript",
   "agent.file.list",
   "agent.file.read",
   "agent.file.write",
@@ -4458,6 +4459,13 @@ var MockPiDriver = class {
   }
   async listModels() {
     return [{ provider: "mock", id: "mock-model" }];
+  }
+  async readTranscript(sessionId) {
+    const session = this.require(sessionId);
+    return [
+      { role: "user", text: "Mock conversation history", timestamp: (/* @__PURE__ */ new Date()).toISOString() },
+      { role: "assistant", text: `This session (${session.handle.id.slice(0, 8)}) used the mock driver; no real history exists.`, timestamp: (/* @__PURE__ */ new Date()).toISOString() }
+    ];
   }
   subscribe(sessionId, listener) {
     const session = this.require(sessionId);
@@ -4761,6 +4769,10 @@ var EmbeddedPiDriver = class {
       sessionFile: session.sessionFile
     };
   }
+  async readTranscript(sessionId) {
+    const managed = this.require(sessionId);
+    return mapMessages(managed.session.messages);
+  }
   async listModels() {
     const pi = await this.piModule();
     if (!this.modelRuntime) return [];
@@ -4899,6 +4911,43 @@ var EmbeddedPiDriver = class {
     }
   }
 };
+function mapMessages(messages) {
+  const out = [];
+  for (const message of messages) {
+    const role = String(message.role ?? "");
+    const content = message.content ?? [];
+    const textParts = [];
+    const thinkingParts = [];
+    for (const item of content) {
+      const type = String(item.type ?? "");
+      if (type === "text" && typeof item.text === "string") textParts.push(item.text);
+      else if (type === "thinking" && typeof item.thinking === "string") thinkingParts.push(item.thinking);
+    }
+    const toolName = typeof message.toolName === "string" ? message.toolName : void 0;
+    if (role === "user") {
+      out.push({ role: "user", text: textParts.join("\n"), timestamp: stringOr(message.timestamp) });
+    } else if (role === "assistant") {
+      out.push({
+        role: "assistant",
+        text: textParts.join("\n") || void 0,
+        thinking: thinkingParts.join("\n") || void 0,
+        timestamp: stringOr(message.timestamp)
+      });
+    } else if (role === "toolResult" || role === "tool") {
+      out.push({
+        role: "tool",
+        toolName,
+        toolCallId: typeof message.toolCallId === "string" ? message.toolCallId : void 0,
+        output: textParts.join("\n") || void 0,
+        timestamp: stringOr(message.timestamp)
+      });
+    }
+  }
+  return out;
+}
+function stringOr(value) {
+  return typeof value === "string" ? value : void 0;
+}
 
 // src/exec.ts
 var import_node_child_process = require("node:child_process");
@@ -9511,13 +9560,13 @@ var logOutputSync = ({ serializedResult, fdNumber, state, verboseInfo, encoding,
   }
 };
 var writeToFiles = (serializedResult, stdioItems, outputFiles) => {
-  for (const { path: path10, append } of stdioItems.filter(({ type }) => FILE_TYPES.has(type))) {
-    const pathString = typeof path10 === "string" ? path10 : path10.toString();
+  for (const { path: path11, append } of stdioItems.filter(({ type }) => FILE_TYPES.has(type))) {
+    const pathString = typeof path11 === "string" ? path11 : path11.toString();
     if (append || outputFiles.has(pathString)) {
-      (0, import_node_fs6.appendFileSync)(path10, serializedResult);
+      (0, import_node_fs6.appendFileSync)(path11, serializedResult);
     } else {
       outputFiles.add(pathString);
-      (0, import_node_fs6.writeFileSync)(path10, serializedResult);
+      (0, import_node_fs6.writeFileSync)(path11, serializedResult);
     }
   }
 };
@@ -12119,6 +12168,10 @@ var ProcessSupervisor = class {
   }
 };
 
+// src/sessionSupervisor.ts
+var import_node_fs8 = __toESM(require("node:fs"), 1);
+var import_node_path9 = __toESM(require("node:path"), 1);
+
 // ../../packages/pi-driver/src/events.ts
 function driverEventToEnvelope(sessionId, event) {
   const base = { scope: "session", sessionId };
@@ -12241,6 +12294,28 @@ var SessionSupervisor = class {
   async info(sessionId) {
     return this.driver.getSessionInfo(this.require(sessionId));
   }
+  /**
+   * Read a session's history. Live sessions return their in-memory
+   * messages; otherwise the native session file is re-opened, read, and
+   * disposed (ADR-0005 — the native file is the source of truth).
+   */
+  async transcript(sessionId, nativeSessionPath, nativePiSessionId) {
+    const live = this.sessions.get(sessionId);
+    if (live) {
+      return this.driver.readTranscript(live.driverSessionId);
+    }
+    const path11 = nativeSessionPath ?? findNativeSessionFile(nativePiSessionId);
+    if (!path11) {
+      throw new Error(`Session ${sessionId} is not live and its native session file could not be located`);
+    }
+    const tempId = `transcript_${crypto.randomUUID()}`;
+    const handle = await this.driver.resume(path11);
+    try {
+      return await this.driver.readTranscript(handle.id);
+    } finally {
+      await this.driver.dispose(handle.id);
+    }
+  }
   async models() {
     return this.driver.listModels();
   }
@@ -12272,16 +12347,41 @@ var SessionSupervisor = class {
     this.events.onEvent(sessionId, envelope);
   }
 };
+function findNativeSessionFile(nativePiSessionId) {
+  if (!nativePiSessionId) return null;
+  const agentDir = process.env.PI_CODING_AGENT_DIR ?? "/state/pi-agent";
+  const sessionsRoot = import_node_path9.default.join(agentDir, "sessions");
+  const stack = [sessionsRoot];
+  const pattern = `_${nativePiSessionId}.jsonl`;
+  while (stack.length > 0) {
+    const dir = stack.pop();
+    let entries;
+    try {
+      entries = import_node_fs8.default.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const full = import_node_path9.default.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(full);
+      } else if (entry.name.endsWith(pattern)) {
+        return full;
+      }
+    }
+  }
+  return null;
+}
 
 // src/terminalManager.ts
 var import_node_module = require("node:module");
-var import_node_path9 = __toESM(require("node:path"), 1);
+var import_node_path10 = __toESM(require("node:path"), 1);
 var import_node_child_process8 = require("node:child_process");
 var import_meta = {};
 var MAX_BUFFER_CHARS = 64 * 1024;
 function loadPty() {
   try {
-    const requireFn = typeof __dirname === "string" ? (0, import_node_module.createRequire)(import_node_path9.default.join(__dirname, "pi-control-agent.cjs")) : (0, import_node_module.createRequire)(import_meta.url);
+    const requireFn = typeof __dirname === "string" ? (0, import_node_module.createRequire)(import_node_path10.default.join(__dirname, "pi-control-agent.cjs")) : (0, import_node_module.createRequire)(import_meta.url);
     return requireFn("node-pty");
   } catch {
     return null;
@@ -12687,6 +12787,14 @@ async function startAgentServer(options) {
         case "agent.session.models": {
           const models = await sessionSupervisor.models();
           socket.send(JSON.stringify({ type: "agent.session.models", payload: { models, commandId: command.id } }));
+          return;
+        }
+        case "agent.session.transcript": {
+          const request = command.payload;
+          const messages = await sessionSupervisor.transcript(request.sessionId, request.nativeSessionPath, request.nativePiSessionId);
+          socket.send(
+            JSON.stringify({ type: "agent.session.transcript", payload: { sessionId: request.sessionId, messages, commandId: command.id } })
+          );
           return;
         }
         case "agent.file.list": {

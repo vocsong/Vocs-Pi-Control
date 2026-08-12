@@ -182,6 +182,12 @@ export class WorkspaceSessionManager {
     return this.agents.sessionInfo(workspaceId, sessionId);
   }
 
+  async transcript(sessionId: string) {
+    const row = this.db.select().from(schema.sessions).where(eq(schema.sessions.id, sessionId)).get();
+    if (!row?.workspaceId) throw new Error(`Unknown workspace session ${sessionId}`);
+    return this.agents.sessionTranscript(row.workspaceId, sessionId, row.nativePiSessionPath ?? undefined, row.nativePiSessionId ?? undefined);
+  }
+
   async models(workspaceId: string) {
     return this.agents.sessionModels(workspaceId);
   }

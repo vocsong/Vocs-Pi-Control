@@ -216,6 +216,7 @@ export class AgentClient {
       case "agent.session.list":
       case "agent.session.info":
       case "agent.session.models":
+      case "agent.session.transcript":
       case "agent.file.list":
       case "agent.file.read":
       case "agent.file.ok":

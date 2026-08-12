@@ -117,6 +117,34 @@ export function ChatView() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  const loadTranscript = useCallback(async (sessionId: string) => {
+    try {
+      const { messages } = await api.sessionTranscript(sessionId);
+      if (messages.length === 0) return;
+      const items: ChatItem[] = [
+        { kind: "system", text: "Restored from the native Pi session", tone: "info" },
+        ...messages.map((m) => {
+          if (m.role === "user") {
+            return { kind: "user" as const, messageId: crypto.randomUUID(), content: m.text ?? "", createdAt: new Date().toISOString(), ts: Date.now() };
+          }
+          if (m.role === "tool") {
+            return { kind: "tool" as const, toolCallId: crypto.randomUUID(), name: m.toolName ?? "tool", output: m.output, status: "done" as const, ts: Date.now() };
+          }
+          return { kind: "assistant" as const, messageId: crypto.randomUUID(), text: m.text ?? "", streaming: false, ts: Date.now() };
+        }),
+      ];
+      const itemsWithThinking = items.flatMap((item) =>
+        item.kind === "assistant" ? [] : [item],
+      );
+      void itemsWithThinking;
+      usePiControl.setState((st) => ({
+        items: { ...st.items, [sessionId]: [...(st.items[sessionId] ?? []), ...items] },
+      }));
+    } catch {
+      // agent offline / session not live — the UI shows the existing hint
+    }
+  }, []);
+
   const loadCapabilities = useCallback(async () => {
     if (!activeSessionId) return;
     const s = usePiControl.getState().sessions[activeSessionId];
@@ -134,13 +162,19 @@ export function ChatView() {
     setModels([]);
     if (activeSessionId) void loadCapabilities();
     const sessionInfo = activeSessionId ? usePiControl.getState().sessions[activeSessionId] : undefined;
+    // Restore history from the native Pi session when the live replay
+    // cannot (server restart / buffer eviction / stopped sandbox).
+    const existing = activeSessionId ? (usePiControl.getState().items[activeSessionId] ?? []) : [];
+    if (activeSessionId && sessionInfo?.workspaceId && existing.length === 0) {
+      void loadTranscript(activeSessionId);
+    }
     if (sessionInfo?.workspaceId) {
       api
         .listModels(sessionInfo.workspaceId)
         .then(({ models: m }) => setModels(m))
         .catch(() => undefined);
     }
-  }, [activeSessionId, loadCapabilities]);
+  }, [activeSessionId, loadCapabilities, loadTranscript]);
 
   const setModel = async (model: string) => {
     if (!activeSessionId) return;

@@ -207,6 +207,15 @@ export class AgentManager {
     return (event.payload as { models: unknown[] }).models;
   }
 
+  async sessionTranscript(workspaceId: string, sessionId: string, nativeSessionPath?: string, nativePiSessionId?: string) {
+    const event = await this.require(workspaceId).request(
+      "agent.session.transcript",
+      { sessionId, nativeSessionPath, nativePiSessionId },
+      30_000,
+    );
+    return (event.payload as { messages: unknown[] }).messages;
+  }
+
   async disposeSession(workspaceId: string, sessionId: string): Promise<void> {
     await this.waitForConnection(workspaceId, 3_000).catch(() => undefined);
     await this.require(workspaceId).request("agent.session.dispose", { sessionId }, 10_000);

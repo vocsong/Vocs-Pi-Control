@@ -129,6 +129,16 @@ export function registerSessionRoutes(
     }
   });
 
+  app.get("/api/sessions/:sessionId/transcript", async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string };
+    if (!workspaceSessions.owns(sessionId)) return reply.code(404).send({ error: "not_a_workspace_session" });
+    try {
+      return { messages: await workspaceSessions.transcript(sessionId) };
+    } catch (error) {
+      return reply.code(409).send({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
   app.post("/api/sessions/:sessionId/compact", async (request, reply) => {
     const { sessionId } = request.params as { sessionId: string };
     if (!workspaceSessions.owns(sessionId)) return reply.code(404).send({ error: "not_a_workspace_session" });

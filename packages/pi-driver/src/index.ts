@@ -64,6 +64,18 @@ export interface ModelCatalogEntry {
   id: string;
 }
 
+/** A display-oriented message read from a native Pi session (ADR-0005). */
+export interface TranscriptMessage {
+  role: "user" | "assistant" | "tool";
+  text?: string;
+  thinking?: string;
+  toolName?: string;
+  toolCallId?: string;
+  input?: unknown;
+  output?: string;
+  timestamp?: string;
+}
+
 /* ------------------------------------------------------------------ */
 /* Driver events (normalized, upstream-agnostic)                       */
 /* ------------------------------------------------------------------ */
@@ -109,6 +121,9 @@ export interface PiSessionDriver {
 
   /** Models available to the runtime (provider catalogs + auth status). */
   listModels(): Promise<ModelCatalogEntry[]>;
+
+  /** Conversation history of a live session. */
+  readTranscript(sessionId: string): Promise<TranscriptMessage[]>;
 
   subscribe(sessionId: string, listener: PiDriverEventListener): () => void;
 
