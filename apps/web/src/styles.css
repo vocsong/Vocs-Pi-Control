@@ -167,9 +167,17 @@ body {
 }
 
 .btn-icon {
-  padding: 3px 7px;
-  font-size: 11px;
-  line-height: 1.2;
+  /* Fixed-size square icon buttons: single-glyph actions (start/stop/
+     rebuild/settings/sidebar) render as identical boxes regardless of
+     the glyph's intrinsic width. */
+  width: 26px;
+  height: 24px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
 }
 
 /* Inline forms */
