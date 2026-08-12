@@ -166,12 +166,15 @@ body {
   opacity: 1;
 }
 
-.btn-icon {
-  /* Fixed-size SQUARE icon buttons: single-glyph actions (start/stop/
-     rebuild/settings/sidebar) render as identical boxes; row actions
-     override border-radius to 50% below for true circles. */
+.btn.btn-icon {
+  /* The generic .btn rule appears later in this file; use the combined
+     selector so its 6px 14px padding cannot collapse an inline SVG to 0px.
+     flex-basis makes every control an exact 26×26 square. */
   width: 26px;
+  min-width: 26px;
   height: 26px;
+  min-height: 26px;
+  flex: 0 0 26px;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -180,8 +183,14 @@ body {
   line-height: 1;
 }
 
-/* The start/stop/rebuild row actions are true circles (26×26 box). */
-.btn-icon-round {
+.btn.btn-icon > svg {
+  display: block;
+  flex: 0 0 auto;
+}
+
+/* More specific than each theme's html.theme-* .btn radius rule. The
+   start/stop/rebuild actions are true circles because their boxes are square. */
+.project-actions .btn.btn-icon-round {
   border-radius: 50%;
 }
 
