@@ -38,7 +38,11 @@ export function App() {
 
   // Initial load: health + persisted sessions + hierarchy + sandbox status.
   useEffect(() => {
-    api.health().then(setHealth).catch(() => setHealth(null));
+    api
+      .health()
+      .then(setHealth)
+      .catch(() => setHealth(null));
+    void usePiControl.getState().loadSettings();
     api
       .listSessions()
       .then(({ sessions }) => {

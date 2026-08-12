@@ -273,7 +273,11 @@ export const api = {
     json<{
       settings: {
         providers: Array<{ key: string; configured: boolean }>;
-        defaults: { defaultModel: string | null; defaultThinkingLevel: string | null };
+        defaults: {
+          defaultModel: string | null;
+          defaultThinkingLevel: string | null;
+          showThinkingByDefault: boolean;
+        };
         rootFolder: string | null;
       };
     }>("/api/settings"),
@@ -285,7 +289,11 @@ export const api = {
       body: JSON.stringify({ keys }),
     }),
 
-  saveDefaults: (body: { defaultModel?: string | null; defaultThinkingLevel?: string | null }) =>
+  saveDefaults: (body: {
+    defaultModel?: string | null;
+    defaultThinkingLevel?: string | null;
+    showThinkingByDefault?: boolean;
+  }) =>
     json<{ ok: boolean }>("/api/settings/defaults", {
       method: "PUT",
       headers: { "content-type": "application/json" },

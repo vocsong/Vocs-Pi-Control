@@ -23,6 +23,8 @@ export function SettingsView() {
   const [keys, setKeys] = useState<Record<string, string>>({});
   const [defaultModel, setDefaultModel] = useState("");
   const [defaultThinking, setDefaultThinking] = useState("");
+  const showThinkingByDefault = usePiControl((s) => s.showThinkingByDefault);
+  const setShowThinkingByDefault = usePiControl((s) => s.setShowThinkingByDefault);
   const [rootFolder, setRootFolder] = useState("");
   const [models, setModels] = useState<Array<{ provider: string; id: string }>>([]);
   const [saved, setSaved] = useState(false);
@@ -160,6 +162,14 @@ export function SettingsView() {
               </option>
             ))}
           </select>
+        </label>
+        <label className="settings-row">
+          <span className="settings-label">Show thinking blocks expanded by default</span>
+          <input
+            type="checkbox"
+            checked={showThinkingByDefault}
+            onChange={(e) => setShowThinkingByDefault(e.target.checked)}
+          />
         </label>
         <div className="settings-actions">
           <button className="btn btn-primary" onClick={() => void saveDefaults()}>

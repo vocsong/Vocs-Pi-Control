@@ -12,6 +12,7 @@ const defaultsBody = z
   .object({
     defaultModel: z.string().max(300).nullable().optional(),
     defaultThinkingLevel: z.string().max(50).nullable().optional(),
+    showThinkingByDefault: z.boolean().optional(),
   })
   .strict();
 

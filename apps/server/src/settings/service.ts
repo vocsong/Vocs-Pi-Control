@@ -41,6 +41,8 @@ export interface ProviderStatus {
 export interface SessionDefaults {
   defaultModel: string | null;
   defaultThinkingLevel: string | null;
+  /** Keep completed thinking blocks expanded by default. */
+  showThinkingByDefault: boolean;
 }
 
 export interface SettingsSnapshot {
@@ -125,9 +127,13 @@ export class SettingsService {
     const raw = this.getSetting(DEFAULTS_KEY);
     try {
       const parsed = raw ? (JSON.parse(raw) as SessionDefaults) : null;
-      return { defaultModel: parsed?.defaultModel ?? null, defaultThinkingLevel: parsed?.defaultThinkingLevel ?? null };
+      return {
+        defaultModel: parsed?.defaultModel ?? null,
+        defaultThinkingLevel: parsed?.defaultThinkingLevel ?? null,
+        showThinkingByDefault: parsed?.showThinkingByDefault ?? false,
+      };
     } catch {
-      return { defaultModel: null, defaultThinkingLevel: null };
+      return { defaultModel: null, defaultThinkingLevel: null, showThinkingByDefault: false };
     }
   }
 
@@ -155,6 +161,8 @@ export class SettingsService {
       defaultModel: defaults.defaultModel === undefined ? current.defaultModel : defaults.defaultModel,
       defaultThinkingLevel:
         defaults.defaultThinkingLevel === undefined ? current.defaultThinkingLevel : defaults.defaultThinkingLevel,
+      showThinkingByDefault:
+        defaults.showThinkingByDefault === undefined ? current.showThinkingByDefault : defaults.showThinkingByDefault,
     };
     this.setSetting(DEFAULTS_KEY, JSON.stringify(next));
   }

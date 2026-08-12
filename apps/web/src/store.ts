@@ -73,7 +73,12 @@ interface PiControlState {
   replaying: boolean;
   /** Verbose envelope log (bounded) for troubleshooting (LOG tab). */
   log: Array<{ seq: number; ts: number; type: string; scope: string; sessionId?: string; payload: unknown }>;
+  /** Keep completed thinking blocks expanded (settings → session defaults). */
+  showThinkingByDefault: boolean;
 
+  /** Load settings that affect chat rendering (session defaults). */
+  loadSettings(): Promise<void>;
+  setShowThinkingByDefault(value: boolean): void;
   setConnection(connection: PiControlState["connection"]): void;
   setActive(sessionId: string | null): void;
   setActiveWorkspace(workspaceId: string | null): void;
@@ -123,6 +128,7 @@ export const usePiControl = create<PiControlState>((set, get) => ({
   requestedFile: null,
   replaying: false,
   log: [],
+  showThinkingByDefault: false,
 
   setConnection: (connection) => set({ connection }),
   setActive: (activeSessionId) => set({ activeSessionId }),
@@ -279,6 +285,20 @@ export const usePiControl = create<PiControlState>((set, get) => ({
   setRequestedFile: (requestedFile) => set({ requestedFile }),
 
   clearLog: () => set({ log: [] }),
+
+  loadSettings: async () => {
+    try {
+      const { settings } = await api.getSettings();
+      set({ showThinkingByDefault: settings.defaults?.showThinkingByDefault ?? false });
+    } catch {
+      /* non-fatal */
+    }
+  },
+
+  setShowThinkingByDefault: (value) => {
+    set({ showThinkingByDefault: value });
+    void api.saveDefaults({ showThinkingByDefault: value }).catch(() => undefined);
+  },
 
   apply: (envelope) => {
     const state = get();
