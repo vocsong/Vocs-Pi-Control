@@ -83,7 +83,7 @@ export function registerSessionRoutes(
     return { ok: true };
   });
 
-  app.post("/api/sessions/:sessionId/abort", async (request, reply) => {
+  app.post("/api/sessions/:sessionId/abort", async (request, _reply) => {
     const { sessionId } = request.params as { sessionId: string };
     if (workspaceSessions.owns(sessionId)) {
       await workspaceSessions.abort(sessionId);

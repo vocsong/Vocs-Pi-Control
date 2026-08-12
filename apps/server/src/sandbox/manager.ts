@@ -16,7 +16,8 @@ import net from "node:net";
 import crypto from "node:crypto";
 import path from "node:path";
 import { schema, type Db } from "@pi-control/database";
-import { desc, eq, isNull } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
+import { newId, nowIso } from "@pi-control/shared";
 import {
   EVENT_TYPES,
   type SandboxInfo,
@@ -31,7 +32,6 @@ import {
   type SandboxRuntime,
   type SelfTestResult,
 } from "@pi-control/sandbox";
-import { newId, nowIso } from "@pi-control/shared";
 import type { RealtimeHub } from "../realtime/hub.js";
 import type { Logger } from "../logger.js";
 import type { AgentManager, AgentEndpoint } from "../agents/agentManager.js";
@@ -361,6 +361,7 @@ export class SandboxManager {
     } catch (error) {
       throw new Error(
         `Cannot resolve sandbox folder for mounting: ${hostPath} (${(error as NodeJS.ErrnoException).message})`,
+        { cause: error },
       );
     }
     this.assertInsideRoot(hostPathReal, "Sandbox folder");

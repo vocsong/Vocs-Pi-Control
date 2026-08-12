@@ -147,7 +147,6 @@ export class SessionSupervisor {
     if (!path) {
       throw new Error(`Session ${sessionId} is not live and its native session file could not be located`);
     }
-    const tempId = `transcript_${crypto.randomUUID()}`;
     const handle = await this.driver.resume(path);
     try {
       return await this.driver.readTranscript(handle.id);

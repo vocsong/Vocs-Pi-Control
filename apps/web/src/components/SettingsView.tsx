@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePiControl } from "../store";
 import { api } from "../api";
 
@@ -30,7 +30,7 @@ export function SettingsView() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const { settings } = await api.getSettings();
       setProviders(settings.providers);
@@ -48,11 +48,11 @@ export function SettingsView() {
         /* agent offline */
       }
     }
-  };
+  }, [activeSandboxId]);
 
   useEffect(() => {
     void load();
-  }, [activeSandboxId]);
+  }, [activeSandboxId, load]);
 
   const saveProviders = async () => {
     setError(null);

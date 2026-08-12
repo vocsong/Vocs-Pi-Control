@@ -9,7 +9,7 @@
  */
 
 import { schema, type Db } from "@pi-control/database";
-import { desc, eq, isNotNull, isNull } from "drizzle-orm";
+import { desc, eq, isNotNull } from "drizzle-orm";
 import { EVENT_TYPES, type SessionInfo, type SessionStatus } from "@pi-control/protocol";
 import { newId, nowIso } from "@pi-control/shared";
 import type { AgentManager } from "../agents/agentManager.js";

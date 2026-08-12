@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: typecheck · tests · build · audit · bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Production dependency audit (fail on high+)
+        run: pnpm audit --prod --audit-level high
+
+      - name: Workspace-agent bundle is committed and fresh (#17)
+        run: |
+          pnpm --filter @pi-control/workspace-agent bundle
+          git diff --exit-code -- images/base/agent/agent.cjs
+
+  smoke:
+    name: runtime smoke (mock sandbox + auth)
+    runs-on: ubuntu-latest
+    needs: checks
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Start the control server (mock runtime on CI)
+        run: pnpm --filter @pi-control/server start > /tmp/server.log 2>&1 &
+
+      - name: Wait for the server
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:5174/api/health > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          echo "server did not become healthy"; tail -50 /tmp/server.log; exit 1
+
+      - name: Auth + guard smoke (#1)
+        run: |
+          set -e
+          # Public health works, everything else needs a session.
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:5174/api/health)" = "200"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:5174/api/sessions)" = "401"
+          # Bootstrap token is printed at startup.
+          TOKEN=$(node -e '
+            const lines = require("fs").readFileSync("/tmp/server.log", "utf8").split("\n");
+            for (const l of lines) {
+              try { const j = JSON.parse(l); if (j.token) { console.log(j.token); process.exit(0); } } catch {}
+            }
+            process.exit(1);')
+          # Login → cookie → authorized; wrong token rejected.
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{"token":"wrong"}' http://127.0.0.1:5174/api/auth/login)" = "401"
+          curl -s -c /tmp/c -X POST -H 'content-type: application/json' -d "{\"token\":\"$TOKEN\"}" http://127.0.0.1:5174/api/auth/login > /dev/null
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b /tmp/c http://127.0.0.1:5174/api/sessions)" = "200"
+          # Host and Origin guards.
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.example' http://127.0.0.1:5174/api/health)" = "403"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Origin: https://evil.example' -H 'content-type: application/json' -d "{\"token\":\"$TOKEN\"}" http://127.0.0.1:5174/api/auth/login)" = "403"
+          echo "smoke ok"

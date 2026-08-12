@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
@@ -182,7 +182,7 @@ export function ProcessesView() {
   const [busy, setBusy] = useState(false);
   const realtime = getRealtime();
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     if (!activeSandboxId) return;
     try {
       const { processes } = await api.listProcesses(activeSandboxId);
@@ -192,7 +192,7 @@ export function ProcessesView() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  };
+  }, [activeSandboxId]);
 
   useEffect(() => {
     void refresh();
@@ -221,7 +221,7 @@ export function ProcessesView() {
         void refresh();
       }
     });
-  }, [activeSandboxId, realtime]);
+  }, [activeSandboxId, realtime, refresh]);
 
   const spawn = async () => {
     if (!activeSandboxId || !command.trim()) return;

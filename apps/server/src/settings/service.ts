@@ -12,7 +12,6 @@ import fs from "node:fs";
 import { schema, type Db } from "@pi-control/database";
 import { eq } from "drizzle-orm";
 import type { Logger } from "../logger.js";
-
 export const PROVIDER_KEY_FIELDS = [
   "ANTHROPIC_API_KEY",
   "OPENAI_API_KEY",
@@ -96,7 +95,6 @@ export class SettingsService {
   /** Set (or clear with empty) the root folder; must be an existing directory. */
   setRootFolder(path: string | null): void {
     if (path && path.trim()) {
-      const fs = require("node:fs") as typeof import("node:fs");
       const resolved = fs.realpathSync(path.trim());
       if (!fs.statSync(resolved).isDirectory()) throw new Error(`Not a directory: ${path}`);
       this.setSetting(ROOT_FOLDER_KEY, resolved);

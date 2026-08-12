@@ -8,7 +8,6 @@
  * (plan §27).
  */
 
-import fastifyWebsocket from "@fastify/websocket";
 import { z } from "zod";
 import {
   CLIENT_COMMAND_TYPES,

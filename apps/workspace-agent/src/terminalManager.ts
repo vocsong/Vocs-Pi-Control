@@ -10,7 +10,6 @@
 
 import { createRequire } from "node:module";
 import path from "node:path";
-import os from "node:os";
 import { spawn, type ChildProcess } from "node:child_process";
 import { scrubbedChildEnv } from "./credentials.js";
 import { newId, nowIso } from "@pi-control/shared";

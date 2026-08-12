@@ -19,4 +19,29 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // CodeMirror + language packs are only used by the Files tab
+          // (lazy-loaded, issue #19); keeping them in one vendor chunk
+          // avoids duplicated editor internals across the lang packs.
+          codemirror: [
+            "@uiw/react-codemirror",
+            "@codemirror/lang-css",
+            "@codemirror/lang-html",
+            "@codemirror/lang-javascript",
+            "@codemirror/lang-json",
+            "@codemirror/lang-markdown",
+            "@codemirror/lang-python",
+          ],
+        },
+      },
+    },
+    // The Files/CodeMirror vendor chunk is ~675 KB but loads on demand
+    // only when the Files tab opens; the initial bundle stays at ~265 KB.
+    // The limit is raised deliberately for this documented exception
+    // (issue #19).
+    chunkSizeWarningLimit: 700,
+  },
 });

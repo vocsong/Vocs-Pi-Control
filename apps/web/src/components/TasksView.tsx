@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { TaskInfo, TaskStatus } from "@pi-control/protocol";
 import { usePiControl } from "../store";
 import { api } from "../api";
@@ -15,7 +15,7 @@ export function TasksView() {
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!activeSandboxId) return;
     try {
       const { tasks: rows } = await api.listTasks(activeSandboxId);
@@ -23,12 +23,12 @@ export function TasksView() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  };
+  }, [activeSandboxId]);
 
   useEffect(() => {
     setTasks([]);
     if (activeSandboxId) void load();
-  }, [activeSandboxId]);
+  }, [activeSandboxId, load]);
 
   const create = async () => {
     if (!activeSandboxId || !title.trim()) return;

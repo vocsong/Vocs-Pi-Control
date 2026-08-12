@@ -55,11 +55,6 @@ const THINKING_SCRIPT = [
   "I'll run the test suite to get a baseline, then summarize.",
 ];
 
-const ASSISTANT_SCRIPT = [
-  "On it — I'll work through this step by step.",
-  "I've run the baseline checks against the workspace.",
-  "Here is the completed summary of what happened.",
-];
 
 export class MockPiDriver implements PiSessionDriver {
   private readonly sessions = new Map<string, MockSessionState>();

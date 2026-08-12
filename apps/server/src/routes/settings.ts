@@ -21,7 +21,7 @@ export function registerSettingsRoutes(app: AppFastify, settings: SettingsServic
     return { settings: settings.snapshot() };
   });
 
-  app.put("/api/settings/providers", async (request, reply) => {
+  app.put("/api/settings/providers", async (request, _reply) => {
     const body = providerKeysBody.parse(request.body);
     settings.saveProviderKeys(body.keys);
     // Reconnect agents so the updated credentials are forwarded at hello.
@@ -29,7 +29,7 @@ export function registerSettingsRoutes(app: AppFastify, settings: SettingsServic
     return { ok: true, settings: settings.snapshot() };
   });
 
-  app.put("/api/settings/defaults", async (request, reply) => {
+  app.put("/api/settings/defaults", async (request, _reply) => {
     const body = defaultsBody.parse(request.body);
     settings.saveDefaults(body);
     return { ok: true, settings: settings.snapshot() };

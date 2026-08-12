@@ -153,7 +153,7 @@ export class EmbeddedPiDriver implements PiSessionDriver {
       return mod;
     } catch (error) {
       this.piLoadError = `Pi SDK unavailable: ${error instanceof Error ? error.message : String(error)}`;
-      throw new Error(this.piLoadError);
+      throw new Error(this.piLoadError, { cause: error });
     }
   }
 
@@ -324,7 +324,7 @@ export class EmbeddedPiDriver implements PiSessionDriver {
   }
 
   async listModels() {
-    const pi = await this.piModule();
+    await this.piModule();
     if (!this.modelRuntime) return [];
     const available = await this.modelRuntime.getAvailable();
     // pi returns provider as a STRING ("deepseek") — never "unknown".

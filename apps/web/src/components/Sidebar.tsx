@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { SandboxInfo, WorkspaceInfo } from "@pi-control/protocol";
+import type { WorkspaceInfo } from "@pi-control/protocol";
 import { usePiControl } from "../store";
 import { api } from "../api";
 

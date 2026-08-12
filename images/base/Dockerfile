@@ -5,8 +5,17 @@
 # top of this. No host secrets ever enter this image.
 #
 # Build:  podman build -t pi-control/base:local -f images/base/Dockerfile images/base
+#
+# Reproducibility (issue #18): the base image is pinned by DIGEST and
+# node-pty is pinned to an exact version. To update deliberately:
+#   podman pull docker.io/library/node:22-bookworm-slim
+#   podman image inspect docker.io/library/node:22-bookworm-slim --format '{{.Digest}}'
+#   npm view node-pty version
+# then bump both below, rebuild base + profiles, and rebuild affected
+# sandboxes. Generate an SBOM with `trivy image pi-control/base:local` or
+# `syft scan pi-control/base:local` before shipping a rebuild.
 
-FROM node:22-bookworm-slim
+FROM node:22-bookworm-slim@sha256:a17d50af28002a160548bd4225b3cfcb12c5efcb171f79e68758f2885fb1b066
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
@@ -60,7 +69,7 @@ RUN apt-get update \
 RUN mkdir -p /opt/pi-control \
   && cd /opt/pi-control \
   && npm init -y > /dev/null \
-  && npm install --no-audit --no-fund @earendil-works/pi-coding-agent@${PI_CODING_AGENT_VERSION} node-pty 2>&1 | tail -2
+  && npm install --no-audit --no-fund @earendil-works/pi-coding-agent@${PI_CODING_AGENT_VERSION} node-pty@1.1.0 2>&1 | tail -2
 
 ENV NODE_PATH=/opt/pi-control/node_modules
 

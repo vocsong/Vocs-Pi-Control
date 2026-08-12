@@ -1,21 +1,30 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { usePiControl } from "./store";
 import { getRealtime } from "./realtime/useRealtime";
 import { api, type HealthInfo } from "./api";
 import { Sidebar } from "./components/Sidebar";
 import { ChatView } from "./components/ChatView";
 import { Composer } from "./components/Composer";
-import { FilesView } from "./components/FilesView";
 import { GitView } from "./components/GitView";
-import { ProcessesView, TerminalView } from "./components/TerminalView";
 import { TasksView } from "./components/TasksView";
-import { LogView } from "./components/LogView";
-import { SettingsView } from "./components/SettingsView";
-import { TraceView } from "./components/TraceView";
 import { CommandPalette, QuickOpen, type CommandItem } from "./components/CommandPalette";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
 import { StatusBar } from "./components/StatusBar";
 import { LoginGate } from "./components/LoginGate";
+
+// Heavy/rarely-used views load on demand so the initial bundle stays small
+// (issue #19). Terminal carries xterm; Files carries CodeMirror + language
+// packs; trace/log/settings are independent chunks.
+const TerminalView = lazy(() => import("./components/TerminalView").then((m) => ({ default: m.TerminalView })));
+const ProcessesView = lazy(() => import("./components/TerminalView").then((m) => ({ default: m.ProcessesView })));
+const FilesView = lazy(() => import("./components/FilesView").then((m) => ({ default: m.FilesView })));
+const TraceView = lazy(() => import("./components/TraceView").then((m) => ({ default: m.TraceView })));
+const LogView = lazy(() => import("./components/LogView").then((m) => ({ default: m.LogView })));
+const SettingsView = lazy(() => import("./components/SettingsView").then((m) => ({ default: m.SettingsView })));
+
+function ViewSuspense({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<div className="files-empty">Loading…</div>}>{children}</Suspense>;
+}
 
 type Tab = "chat" | "files" | "git" | "terminal" | "processes" | "tasks" | "trace" | "log" | "settings";
 
@@ -56,12 +65,11 @@ export function App() {
     };
   }, []);
 
-  if (authenticated === false) {
-    return <LoginGate />;
-  }
-
   // Initial load: health + persisted sessions + hierarchy + sandbox status.
+  // Runs once the session is confirmed so unauthenticated 401s never pollute
+  // state; re-runs after login (issue #1).
   useEffect(() => {
+    if (authenticated !== true) return;
     api
       .health()
       .then(setHealth)
@@ -104,7 +112,7 @@ export function App() {
       .sandboxStatus()
       .then(({ status }) => usePiControl.setState({ sandbox: status }))
       .catch(() => undefined);
-  }, []);
+  }, [authenticated]);
 
   // Subscribe to the active session whenever the connection (re)opens, and
   // manage the editing lease (plan §27): take on subscribe, heartbeat while
@@ -251,6 +259,13 @@ export function App() {
     });
   }, []);
 
+  // Login gate renders AFTER every hook so hook order stays stable across
+  // renders; unauthenticated data effects above simply 401 and are caught
+  // (issue #1).
+  if (authenticated === false) {
+    return <LoginGate />;
+  }
+
   return (
     <div className="app">
       <header className="app-header">
@@ -327,14 +342,38 @@ export function App() {
               <Composer />
             </>
           )}
-          {tab === "files" && <FilesView />}
+          {tab === "files" && (
+            <ViewSuspense>
+              <FilesView />
+            </ViewSuspense>
+          )}
           {tab === "git" && <GitView />}
-          {tab === "terminal" && <TerminalView />}
-          {tab === "processes" && <ProcessesView />}
+          {tab === "terminal" && (
+            <ViewSuspense>
+              <TerminalView />
+            </ViewSuspense>
+          )}
+          {tab === "processes" && (
+            <ViewSuspense>
+              <ProcessesView />
+            </ViewSuspense>
+          )}
           {tab === "tasks" && <TasksView />}
-          {tab === "trace" && <TraceView />}
-          {tab === "log" && <LogView />}
-          {tab === "settings" && <SettingsView />}
+          {tab === "trace" && (
+            <ViewSuspense>
+              <TraceView />
+            </ViewSuspense>
+          )}
+          {tab === "log" && (
+            <ViewSuspense>
+              <LogView />
+            </ViewSuspense>
+          )}
+          {tab === "settings" && (
+            <ViewSuspense>
+              <SettingsView />
+            </ViewSuspense>
+          )}
         </div>
       </div>
       <StatusBar health={health} />

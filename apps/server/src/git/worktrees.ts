@@ -14,7 +14,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execa } from "execa";
-import { newId } from "@pi-control/shared";
 import type { SandboxManager } from "../sandbox/manager.js";
 import type { Logger } from "../logger.js";
 

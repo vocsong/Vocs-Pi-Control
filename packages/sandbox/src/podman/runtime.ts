@@ -28,7 +28,7 @@ import type {
 } from "../index.js";
 import { buildCreateArgs } from "./buildArgs.js";
 import { translateHostPath } from "./paths.js";
-import { defaultResources, type HostCapacity } from "./resources.js";
+import { type HostCapacity } from "./resources.js";
 import { createPodmanRunner, PodmanError, type PodmanRunner } from "./runner.js";
 
 export const DEFAULT_MACHINE_NAME = "pi-control";

@@ -21,12 +21,6 @@ interface TreeNode extends AgentFileEntry {
 }
 
 const IMAGE_EXT = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico"];
-const MAX_EDIT_BYTES = 512 * 1024;
-
-function isTextLike(name: string): boolean {
-  const ext = name.split(".").pop()?.toLowerCase() ?? "";
-  return !IMAGE_EXT.includes(ext);
-}
 
 function languageFor(name: string) {
   const ext = name.split(".").pop()?.toLowerCase() ?? "";

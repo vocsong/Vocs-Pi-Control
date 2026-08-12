@@ -60,8 +60,18 @@ port and forwards provider credentials at hello.
 4. Workspace session create → prompt → streaming envelopes
    (`thinking.delta`, `tool.start/end`, `assistant.delta`, `session.state
    idle`)
-5. Process spawn survives a control-server restart; kill works
+5. Process spawn survives an agent/control-server disconnect; kill works
 6. Native session resume after workspace restart
+
+## Server restart policy (issue #15)
+
+Restarting the control server **stops every sandbox** (deterministic
+stop-on-boot). Supervised processes and terminals therefore do NOT survive
+a full server restart; they do survive transient control-server
+*disconnects* while the server process stays alive, because the workspace
+agent owns them and reconnects with backoff. Native Pi session transcripts
+persist in the `/state` volumes and are resumed on the next prompt
+(auto-recovery).
 
 ## Troubleshooting
 

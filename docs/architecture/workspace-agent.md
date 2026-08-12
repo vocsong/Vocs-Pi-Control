@@ -12,7 +12,9 @@ control server. It owns:
 - Pi session lifecycle via `SessionSupervisor` + `EmbeddedPiDriver`;
 - translation of Pi driver events into protocol envelope inits;
 - PTYs and terminals (Phase 8);
-- long-running workspace processes (detached, survives server restarts);
+- long-running workspace processes (detached; survive agent reconnects —
+  note: a full control-server restart stops all sandboxes by policy,
+  issue #15);
 - health/resource reporting (5s heartbeat);
 - one-shot exec for controlled operations.
 

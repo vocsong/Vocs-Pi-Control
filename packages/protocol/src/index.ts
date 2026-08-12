@@ -162,7 +162,7 @@ export interface LeaseInfo {
   isSelf?: boolean;
 }
 
-export interface LeaseEventPayload extends LeaseInfo {}
+export type LeaseEventPayload = LeaseInfo;
 
 export interface SnapshotPayload {
   sessionId: string;
