@@ -157,7 +157,7 @@ export const api = {
     json<{ ok: boolean }>(`/api/sandboxes/${sandboxId}/processes/${processId}/kill`, { method: "POST" }),
 
   listPorts: (sandboxId: string) =>
-    json<Array<{ containerPort: number; url: string }>>(`/api/sandboxes/${sandboxId}/ports`),
+    json<{ ports: Array<{ containerPort: number; url: string }> }>(`/api/sandboxes/${sandboxId}/ports`),
 
   sessionCapabilities: (sessionId: string) =>
     json<{ capabilities: Record<string, unknown> }>(`/api/sessions/${sessionId}/capabilities`),

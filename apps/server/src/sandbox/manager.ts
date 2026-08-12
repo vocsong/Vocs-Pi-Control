@@ -292,8 +292,9 @@ export class SandboxManager {
         .get();
       if (existing) continue;
       const now = nowIso();
+      const id = newId("ws");
       this.options.db.insert(schema.projects).values({
-        id: newId("ws"),
+        id,
         machineId: "machine_local",
         name,
         hostRootPath: folder,
@@ -304,7 +305,7 @@ export class SandboxManager {
       this.options.hub.publish({
         scope: "server",
         type: EVENT_TYPES.workspaceCreated,
-        payload: { workspace: { id: newId("ws"), machineId: "machine_local", name, hostRootPath: folder, createdAt: now } },
+        payload: { workspace: { id, machineId: "machine_local", name, hostRootPath: folder, createdAt: now } },
       });
       created++;
     }

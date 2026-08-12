@@ -137,8 +137,8 @@ export const usePiControl = create<PiControlState>((set, get) => ({
 
   selectWorkspace: (workspaceId) => {
     const state = get();
-    set({ activeWorkspaceId: workspaceId });
     const sandbox = Object.values(state.sandboxes).find((sb) => sb.workspaceId === workspaceId);
+    set({ activeWorkspaceId: workspaceId, activeSandboxId: sandbox?.id ?? null });
     if (!sandbox) return;
     const latest = Object.values(state.sessions)
       .filter((sess) => sess.workspaceId === sandbox.id)
@@ -205,6 +205,7 @@ export const usePiControl = create<PiControlState>((set, get) => ({
       sandboxes: { ...get().sandboxes, [sandbox.id]: sandbox },
       sandboxOrder: appendOrder(get().sandboxOrder, sandbox.id),
       activeWorkspaceId: workspace.id,
+      activeSandboxId: sandbox.id,
     });
   },
 
@@ -232,7 +233,7 @@ export const usePiControl = create<PiControlState>((set, get) => ({
   // (auto-created with the workspace name) then starts/stops it.
   startWorkspaceFlow: async (workspaceId) => {
     const { sandbox } = await api.startWorkspace(workspaceId);
-    set({ sandboxes: { ...get().sandboxes, [sandbox.id]: sandbox } });
+    set({ sandboxes: { ...get().sandboxes, [sandbox.id]: sandbox }, activeWorkspaceId: workspaceId, activeSandboxId: sandbox.id });
   },
 
   stopWorkspaceFlow: async (workspaceId) => {
@@ -498,7 +499,7 @@ export const usePiControl = create<PiControlState>((set, get) => ({
         updateItem(
           payload.sessionId,
           (i) => i.kind === "thinking" && i.messageId === payload.messageId,
-          (i) => (i.kind === "thinking" ? { ...i, done: true, open: false } : i),
+          (i) => (i.kind === "thinking" ? { ...i, done: true, open: get().showThinkingByDefault } : i),
         );
         break;
       }

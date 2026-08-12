@@ -197,9 +197,17 @@ export class AgentClient {
       case "agent.terminal.output":
         this.options.events.onTerminalOutput((event.payload as { id: string; data: string }).id, (event.payload as { data: string }).data);
         return;
-      case "agent.terminal.closed":
-        this.options.events.onTerminalClosed((event.payload as { id: string }).id);
+      case "agent.terminal.closed": {
+        // The agent emits this in two forms: a broadcast notification
+        // (no commandId) and the response to a close command (commandId).
+        const payload = event.payload as { id: string; commandId?: string };
+        if (payload.commandId) {
+          this.resolve(payload.commandId, event);
+        } else {
+          this.options.events.onTerminalClosed(payload.id);
+        }
         return;
+      }
       case "agent.process.exited":
         this.options.events.onProcessExited(
           (event.payload as { processId: string }).processId,
@@ -228,7 +236,6 @@ export class AgentClient {
       case "agent.git.log":
       case "agent.git.ok":
       case "agent.terminal.opened":
-      case "agent.terminal.closed":
       case "agent.terminal.list":
       case "agent.ports.list":
         this.resolve((event.payload as { commandId?: string }).commandId ?? "", event);

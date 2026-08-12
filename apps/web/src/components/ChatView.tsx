@@ -192,8 +192,7 @@ export function ChatView() {
     setEditingTitle(false);
     if (!trimmed || !activeSessionId || trimmed === usePiControl.getState().sessions[activeSessionId]?.title) return;
     try {
-      await api.renameSession(activeSessionId, trimmed);
-      usePiControl.getState().renameSession(activeSessionId, trimmed);
+      await usePiControl.getState().renameSession(activeSessionId, trimmed);
     } catch (e) {
       setControlError(e instanceof Error ? e.message : String(e));
     }

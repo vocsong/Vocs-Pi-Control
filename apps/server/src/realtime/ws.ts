@@ -104,7 +104,14 @@ export function registerRealtime(app: AppFastify, deps: RealtimeDeps): void {
 }
 
 async function handleMessage(socket: SocketLike, clientId: string, raw: string, deps: RealtimeDeps): Promise<void> {
-  const parsed = commandSchema.safeParse(JSON.parse(raw));
+  let rawMessage: unknown;
+  try {
+    rawMessage = JSON.parse(raw);
+  } catch {
+    deps.hub.commandError(socket, "?", "invalid JSON message");
+    return;
+  }
+  const parsed = commandSchema.safeParse(rawMessage);
   if (!parsed.success) {
     deps.hub.commandError(socket, "?", `invalid command: ${parsed.error.issues[0]?.message ?? "parse error"}`);
     return;

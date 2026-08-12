@@ -187,7 +187,8 @@ export function ProcessesView() {
     try {
       const { processes } = await api.listProcesses(activeSandboxId);
       setProcesses(processes);
-      setPorts(await api.listPorts(activeSandboxId));
+      const { ports } = await api.listPorts(activeSandboxId);
+      setPorts(ports);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
