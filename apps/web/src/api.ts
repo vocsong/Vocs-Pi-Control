@@ -42,6 +42,13 @@ export const api = {
 
   deleteSession: (sessionId: string) => json<{ ok: boolean }>(`/api/sessions/${sessionId}`, { method: "DELETE" }),
 
+  renameSession: (sessionId: string, title: string) =>
+    json<{ session: SessionInfo }>(`/api/sessions/${sessionId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title }),
+    }),
+
   listFiles: (sandboxId: string, path = "") =>
     json<{ entries: Array<{ name: string; path: string; type: string; size: number; mtimeMs: number }> }>(
       `/api/sandboxes/${sandboxId}/files?path=${encodeURIComponent(path)}`,

@@ -562,6 +562,17 @@ export class SandboxManager {
     return this.createSandbox(workspaceId, { name: workspace.name });
   }
 
+  /** Start the sandbox when it exists and is not already running. */
+  async ensureSandboxRunning(sandboxId: string): Promise<void> {
+    const container = this.options.db.select().from(schema.workspaces).where(eq(schema.workspaces.id, sandboxId)).get();
+    if (!container?.sandboxId) return;
+    const runtimeRow = this.options.db.select().from(schema.sandboxes).where(eq(schema.sandboxes.id, container.sandboxId)).get();
+    if (runtimeRow?.state === "running") return;
+    await this.startSandbox(sandboxId).catch((error) => {
+      this.options.logger.warn({ sandboxId, error: String(error) }, "auto-start before prompt failed");
+    });
+  }
+
   listSandboxes(workspaceId?: string): SandboxInfo[] {
     const rows = workspaceId
       ? this.options.db.select().from(schema.workspaces).where(eq(schema.workspaces.projectId, workspaceId)).all()

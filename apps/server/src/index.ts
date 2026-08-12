@@ -76,7 +76,14 @@ async function main(): Promise<void> {
   });
   // Merge stored provider keys into what agents receive at hello.
   agents.credentialSource = () => settings.providerEnv();
-  const workspaceSessions = new WorkspaceSessionManager(db, agents, hub, logger, () => settings.defaults());
+  const workspaceSessions = new WorkspaceSessionManager(
+    db,
+    agents,
+    hub,
+    logger,
+    () => settings.defaults(),
+    (sandboxId) => sandbox.ensureSandboxRunning(sandboxId),
+  );
 
   const { runtime, detection, reason } = await selectRuntime(logger, process.env);
   logger.info({ runtime: runtime.name, reason, messages: detection.messages }, "sandbox runtime selected");
@@ -95,6 +102,15 @@ async function main(): Promise<void> {
   // Server restart policy: everything stopped, folders synced from the root.
   await sandbox.stopAllSandboxes();
   sandbox.syncWorkspacesFromRoot();
+  // Live detection: folders added to the root appear as workspaces on disk.
+  const syncTimer = setInterval(() => {
+    try {
+      sandbox.syncWorkspacesFromRoot();
+    } catch (error) {
+      logger.warn({ error: String(error) }, "workspace root sync failed");
+    }
+  }, 15_000);
+  syncTimer.unref?.();
   await sandbox.refreshDetection();
   const worktrees = new GitWorktreeService(sandbox, logger);
 

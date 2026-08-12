@@ -4271,6 +4271,7 @@ var AGENT_COMMAND_TYPES = [
 // ../../packages/protocol/src/index.ts
 var EVENT_TYPES = {
   sessionCreated: "session.created",
+  sessionUpdated: "session.updated",
   sessionState: "session.state",
   sessionSnapshot: "session.snapshot",
   sessionLease: "session.lease",
@@ -4666,7 +4667,7 @@ var EmbeddedPiDriver = class {
       nativePiSessionId: result.session.sessionId,
       sessionFile: result.session.sessionFile,
       status: "idle",
-      model: model?.id ?? result.session.model?.id,
+      model: modelRef(model) ?? modelRef(result.session.model),
       thinkingLevel: options.thinkingLevel ?? result.session.thinkingLevel
     };
   }
@@ -4698,7 +4699,7 @@ var EmbeddedPiDriver = class {
       nativePiSessionId: result.session.sessionId,
       sessionFile: result.session.sessionFile,
       status: "idle",
-      model: result.session.model?.id,
+      model: modelRef(result.session.model),
       thinkingLevel: result.session.thinkingLevel
     };
   }
@@ -4947,6 +4948,11 @@ function mapMessages(messages) {
 }
 function stringOr(value) {
   return typeof value === "string" ? value : void 0;
+}
+function modelRef(model) {
+  if (!model?.id) return void 0;
+  const provider = typeof model.provider === "string" && model.provider ? model.provider : "unknown";
+  return `${provider}/${model.id}`;
 }
 
 // src/exec.ts
@@ -12260,14 +12266,14 @@ var SessionSupervisor = class {
     this.register(controlSessionId, info, handle.id);
     return { ...info };
   }
-  async prompt(sessionId, text) {
-    await this.driver.prompt(this.require(sessionId), { text });
+  async prompt(sessionId, text, nativeSessionPath, nativePiSessionId) {
+    await this.driver.prompt(await this.ensureLive(sessionId, nativeSessionPath, nativePiSessionId), { text });
   }
-  async steer(sessionId, text) {
-    await this.driver.steer(this.require(sessionId), { text });
+  async steer(sessionId, text, nativeSessionPath, nativePiSessionId) {
+    await this.driver.steer(await this.ensureLive(sessionId, nativeSessionPath, nativePiSessionId), { text });
   }
-  async followUp(sessionId, text) {
-    await this.driver.followUp(this.require(sessionId), { text });
+  async followUp(sessionId, text, nativeSessionPath, nativePiSessionId) {
+    await this.driver.followUp(await this.ensureLive(sessionId, nativeSessionPath, nativePiSessionId), { text });
   }
   async abort(sessionId) {
     await this.driver.abort(this.require(sessionId));
@@ -12299,6 +12305,22 @@ var SessionSupervisor = class {
    * messages; otherwise the native session file is re-opened, read, and
    * disposed (ADR-0005 — the native file is the source of truth).
    */
+  /**
+   * Resolve a control session to a live driver session, auto-resuming the
+   * native session when the sandbox restarted (the conversation continues).
+   */
+  async ensureLive(sessionId, nativeSessionPath, nativePiSessionId) {
+    const live = this.sessions.get(sessionId);
+    if (live) return live.driverSessionId;
+    const path11 = nativeSessionPath ?? findNativeSessionFile(nativePiSessionId);
+    if (!path11) {
+      throw new Error(`Session ${sessionId} is not live and its native session file could not be located`);
+    }
+    await this.resume(sessionId, path11);
+    const resumed = this.sessions.get(sessionId);
+    if (!resumed) throw new Error(`Could not resume session ${sessionId}`);
+    return resumed.driverSessionId;
+  }
   async transcript(sessionId, nativeSessionPath, nativePiSessionId) {
     const live = this.sessions.get(sessionId);
     if (live) {
@@ -12724,19 +12746,19 @@ async function startAgentServer(options) {
         }
         case "agent.session.prompt": {
           const request = command.payload;
-          await sessionSupervisor.prompt(request.sessionId, request.text);
+          await sessionSupervisor.prompt(request.sessionId, request.text, request.nativeSessionPath, request.nativePiSessionId);
           socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } }));
           return;
         }
         case "agent.session.steer": {
           const request = command.payload;
-          await sessionSupervisor.steer(request.sessionId, request.text);
+          await sessionSupervisor.steer(request.sessionId, request.text, request.nativeSessionPath, request.nativePiSessionId);
           socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } }));
           return;
         }
         case "agent.session.followUp": {
           const request = command.payload;
-          await sessionSupervisor.followUp(request.sessionId, request.text);
+          await sessionSupervisor.followUp(request.sessionId, request.text, request.nativeSessionPath, request.nativePiSessionId);
           socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } }));
           return;
         }

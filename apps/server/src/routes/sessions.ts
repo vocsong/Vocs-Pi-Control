@@ -1,5 +1,10 @@
 import type { AppFastify } from "../types.js";
 import { z } from "zod";
+import { schema } from "@pi-control/database";
+import { eq } from "drizzle-orm";
+import { EVENT_TYPES, type SessionInfo } from "@pi-control/protocol";
+import { nowIso } from "@pi-control/shared";
+import type { RealtimeHub } from "../realtime/hub.js";
 import type { SessionManager } from "../sessions/manager.js";
 import type { WorkspaceSessionManager } from "../sessions/workspaceSessions.js";
 
@@ -17,6 +22,8 @@ export function registerSessionRoutes(
   app: AppFastify,
   sessions: SessionManager,
   workspaceSessions: WorkspaceSessionManager,
+  db: import("@pi-control/database").Db,
+  hub: RealtimeHub,
 ): void {
   app.get("/api/sessions", async () => {
     return { sessions: [...sessions.list(), ...workspaceSessions.list()] };
@@ -68,6 +75,23 @@ export function registerSessionRoutes(
       await sessions.abort(sessionId);
     }
     return { ok: true };
+  });
+
+  app.patch("/api/sessions/:sessionId", async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string };
+    const body = z.object({ title: z.string().min(1).max(200) }).strict().parse(request.body);
+    const row = sessions.get(sessionId) ?? workspaceSessions.get(sessionId);
+    if (!row) return reply.code(404).send({ error: "not_found" });
+    const now = nowIso();
+    db.update(schema.sessions).set({ title: body.title, updatedAt: now }).where(eq(schema.sessions.id, sessionId)).run();
+    const updated: SessionInfo = { ...row, title: body.title, updatedAt: now };
+    hub.publish({
+      scope: "session",
+      sessionId,
+      type: EVENT_TYPES.sessionUpdated,
+      payload: { sessionId, session: updated },
+    });
+    return { session: updated };
   });
 
   app.delete("/api/sessions/:sessionId", async (request, reply) => {

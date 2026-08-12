@@ -72,16 +72,16 @@ export class SessionSupervisor {
     return { ...info };
   }
 
-  async prompt(sessionId: string, text: string): Promise<void> {
-    await this.driver.prompt(this.require(sessionId), { text });
+  async prompt(sessionId: string, text: string, nativeSessionPath?: string, nativePiSessionId?: string): Promise<void> {
+    await this.driver.prompt(await this.ensureLive(sessionId, nativeSessionPath, nativePiSessionId), { text });
   }
 
-  async steer(sessionId: string, text: string): Promise<void> {
-    await this.driver.steer(this.require(sessionId), { text });
+  async steer(sessionId: string, text: string, nativeSessionPath?: string, nativePiSessionId?: string): Promise<void> {
+    await this.driver.steer(await this.ensureLive(sessionId, nativeSessionPath, nativePiSessionId), { text });
   }
 
-  async followUp(sessionId: string, text: string): Promise<void> {
-    await this.driver.followUp(this.require(sessionId), { text });
+  async followUp(sessionId: string, text: string, nativeSessionPath?: string, nativePiSessionId?: string): Promise<void> {
+    await this.driver.followUp(await this.ensureLive(sessionId, nativeSessionPath, nativePiSessionId), { text });
   }
 
   async abort(sessionId: string): Promise<void> {
@@ -121,6 +121,23 @@ export class SessionSupervisor {
    * messages; otherwise the native session file is re-opened, read, and
    * disposed (ADR-0005 — the native file is the source of truth).
    */
+  /**
+   * Resolve a control session to a live driver session, auto-resuming the
+   * native session when the sandbox restarted (the conversation continues).
+   */
+  async ensureLive(sessionId: string, nativeSessionPath?: string, nativePiSessionId?: string): Promise<string> {
+    const live = this.sessions.get(sessionId);
+    if (live) return live.driverSessionId;
+    const path = nativeSessionPath ?? findNativeSessionFile(nativePiSessionId);
+    if (!path) {
+      throw new Error(`Session ${sessionId} is not live and its native session file could not be located`);
+    }
+    await this.resume(sessionId, path);
+    const resumed = this.sessions.get(sessionId);
+    if (!resumed) throw new Error(`Could not resume session ${sessionId}`);
+    return resumed.driverSessionId;
+  }
+
   async transcript(sessionId: string, nativeSessionPath?: string, nativePiSessionId?: string) {
     const live = this.sessions.get(sessionId);
     if (live) {

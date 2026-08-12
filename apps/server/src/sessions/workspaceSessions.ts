@@ -30,6 +30,8 @@ export class WorkspaceSessionManager {
     private readonly hub: RealtimeHub,
     private readonly logger: Logger,
     private readonly defaults?: () => SessionDefaults,
+    /** Starts the workspace's sandbox when it is not running (auto-recovery). */
+    private readonly ensureSandboxRunning?: (sandboxId: string) => Promise<void>,
   ) {}
 
   async create(workspaceId: string, input: CreateWorkspaceSessionInput = {}): Promise<SessionInfo> {
@@ -123,8 +125,25 @@ export class WorkspaceSessionManager {
     return info;
   }
 
+  private async rowWithRecovery(sessionId: string): Promise<{
+    workspaceId: string;
+    nativeSessionPath: string | undefined;
+    nativePiSessionId: string | undefined;
+  }> {
+    const row = this.db.select().from(schema.sessions).where(eq(schema.sessions.id, sessionId)).get();
+    if (!row?.workspaceId) throw new Error(`Unknown workspace session ${sessionId}`);
+    // Auto-recovery: if the sandbox is not running (e.g. after a server
+    // restart), start it so the prompt can proceed.
+    await this.ensureSandboxRunning?.(row.workspaceId);
+    return {
+      workspaceId: row.workspaceId,
+      nativeSessionPath: row.nativePiSessionPath ?? undefined,
+      nativePiSessionId: row.nativePiSessionId ?? undefined,
+    };
+  }
+
   async prompt(sessionId: string, text: string): Promise<void> {
-    const { workspaceId } = this.require(sessionId);
+    const { workspaceId, nativeSessionPath, nativePiSessionId } = await this.rowWithRecovery(sessionId);
     // The embedded driver does not re-emit the user message; publish it
     // server-side (same semantics as the mock path).
     this.hub.publish({
@@ -133,7 +152,7 @@ export class WorkspaceSessionManager {
       type: EVENT_TYPES.userMessage,
       payload: { sessionId, messageId: newId("msg"), content: text, createdAt: nowIso() },
     });
-    await this.agents.promptSession(workspaceId, sessionId, text);
+    await this.agents.promptSession(workspaceId, sessionId, text, nativeSessionPath, nativePiSessionId);
     this.db
       .update(schema.sessions)
       .set({ updatedAt: nowIso(), lastActivityAt: nowIso() })
@@ -142,13 +161,13 @@ export class WorkspaceSessionManager {
   }
 
   async steer(sessionId: string, text: string): Promise<void> {
-    const { workspaceId } = this.require(sessionId);
-    await this.agents.steerSession(workspaceId, sessionId, text);
+    const { workspaceId, nativeSessionPath, nativePiSessionId } = await this.rowWithRecovery(sessionId);
+    await this.agents.steerSession(workspaceId, sessionId, text, nativeSessionPath, nativePiSessionId);
   }
 
   async followUp(sessionId: string, text: string): Promise<void> {
-    const { workspaceId } = this.require(sessionId);
-    await this.agents.followUpSession(workspaceId, sessionId, text);
+    const { workspaceId, nativeSessionPath, nativePiSessionId } = await this.rowWithRecovery(sessionId);
+    await this.agents.followUpSession(workspaceId, sessionId, text, nativeSessionPath, nativePiSessionId);
   }
 
   async abort(sessionId: string): Promise<void> {

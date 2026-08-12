@@ -169,16 +169,31 @@ export class AgentManager {
     return event.payload as Record<string, unknown>;
   }
 
-  async promptSession(workspaceId: string, sessionId: string, text: string): Promise<void> {
-    await this.require(workspaceId).request("agent.session.prompt", { sessionId, text }, 10_000);
+  async promptSession(workspaceId: string, sessionId: string, text: string, nativeSessionPath?: string, nativePiSessionId?: string): Promise<void> {
+    await this.ensureConnected(workspaceId);
+    await this.require(workspaceId).request(
+      "agent.session.prompt",
+      { sessionId, text, nativeSessionPath, nativePiSessionId },
+      120_000,
+    );
   }
 
-  async steerSession(workspaceId: string, sessionId: string, text: string): Promise<void> {
-    await this.require(workspaceId).request("agent.session.steer", { sessionId, text }, 10_000);
+  async steerSession(workspaceId: string, sessionId: string, text: string, nativeSessionPath?: string, nativePiSessionId?: string): Promise<void> {
+    await this.ensureConnected(workspaceId);
+    await this.require(workspaceId).request(
+      "agent.session.steer",
+      { sessionId, text, nativeSessionPath, nativePiSessionId },
+      120_000,
+    );
   }
 
-  async followUpSession(workspaceId: string, sessionId: string, text: string): Promise<void> {
-    await this.require(workspaceId).request("agent.session.followUp", { sessionId, text }, 10_000);
+  async followUpSession(workspaceId: string, sessionId: string, text: string, nativeSessionPath?: string, nativePiSessionId?: string): Promise<void> {
+    await this.ensureConnected(workspaceId);
+    await this.require(workspaceId).request(
+      "agent.session.followUp",
+      { sessionId, text, nativeSessionPath, nativePiSessionId },
+      120_000,
+    );
   }
 
   async abortSession(workspaceId: string, sessionId: string): Promise<void> {
@@ -350,6 +365,11 @@ export class AgentManager {
   }
 
   /* ------------------------------------------------------------------ */
+
+  /** Public wait-for-agent wrapper (used before prompts). */
+  async ensureConnected(workspaceId: string, timeoutMs = 15_000): Promise<void> {
+    await this.waitForConnection(workspaceId, timeoutMs);
+  }
 
   /**
    * The agent inside a freshly started container needs a moment to boot and

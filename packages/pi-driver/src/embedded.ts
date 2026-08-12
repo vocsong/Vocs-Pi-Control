@@ -194,7 +194,7 @@ export class EmbeddedPiDriver implements PiSessionDriver {
       nativePiSessionId: result.session.sessionId,
       sessionFile: result.session.sessionFile,
       status: "idle",
-      model: model?.id ?? result.session.model?.id,
+      model: modelRef(model) ?? modelRef(result.session.model),
       thinkingLevel: options.thinkingLevel ?? result.session.thinkingLevel,
     };
   }
@@ -227,7 +227,7 @@ export class EmbeddedPiDriver implements PiSessionDriver {
       nativePiSessionId: result.session.sessionId,
       sessionFile: result.session.sessionFile,
       status: "idle",
-      model: result.session.model?.id,
+      model: modelRef(result.session.model),
       thinkingLevel: result.session.thinkingLevel,
     };
   }
@@ -509,4 +509,12 @@ function mapMessages(messages: Array<Record<string, unknown>>): TranscriptMessag
 
 function stringOr(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
+}
+
+/** Model refs are stored QUALIFIED (provider/id) so they are always
+ * comparable with the catalog (plan §34). */
+function modelRef(model: { provider?: string; id?: string } | undefined): string | undefined {
+  if (!model?.id) return undefined;
+  const provider = typeof model.provider === "string" && model.provider ? model.provider : "unknown";
+  return `${provider}/${model.id}`;
 }

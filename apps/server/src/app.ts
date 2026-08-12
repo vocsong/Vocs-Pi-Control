@@ -48,7 +48,7 @@ export async function buildApp(deps: AppDeps): Promise<AppFastify> {
   await app.register(fastifyWebsocket);
 
   registerHealthRoutes(app, deps);
-  registerSessionRoutes(app, deps.sessions, deps.workspaceSessions);
+  registerSessionRoutes(app, deps.sessions, deps.workspaceSessions, deps.db, deps.hub);
   registerWorkspaceRoutes(app, deps.sandbox);
   registerSandboxContainerRoutes(app, deps.sandbox, deps.agents);
   registerSandboxRoutes(app, deps.sandbox);

@@ -237,20 +237,20 @@ export async function startAgentServer(options: AgentServerOptions): Promise<Age
           return;
         }
         case "agent.session.prompt": {
-          const request = command.payload as { sessionId: string; text: string };
-          await sessionSupervisor.prompt(request.sessionId, request.text);
+          const request = command.payload as { sessionId: string; text: string; nativeSessionPath?: string; nativePiSessionId?: string };
+          await sessionSupervisor.prompt(request.sessionId, request.text, request.nativeSessionPath, request.nativePiSessionId);
           socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } } satisfies AgentEvent));
           return;
         }
         case "agent.session.steer": {
-          const request = command.payload as { sessionId: string; text: string };
-          await sessionSupervisor.steer(request.sessionId, request.text);
+          const request = command.payload as { sessionId: string; text: string; nativeSessionPath?: string; nativePiSessionId?: string };
+          await sessionSupervisor.steer(request.sessionId, request.text, request.nativeSessionPath, request.nativePiSessionId);
           socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } } satisfies AgentEvent));
           return;
         }
         case "agent.session.followUp": {
-          const request = command.payload as { sessionId: string; text: string };
-          await sessionSupervisor.followUp(request.sessionId, request.text);
+          const request = command.payload as { sessionId: string; text: string; nativeSessionPath?: string; nativePiSessionId?: string };
+          await sessionSupervisor.followUp(request.sessionId, request.text, request.nativeSessionPath, request.nativePiSessionId);
           socket.send(JSON.stringify({ type: "agent.ok", payload: { commandId: command.id } } satisfies AgentEvent));
           return;
         }

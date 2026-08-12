@@ -81,6 +81,8 @@ export function ChatView() {
   const [showCaps, setShowCaps] = useState(false);
   const [controlError, setControlError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
 
   const session = activeSessionId ? sessions[activeSessionId] : undefined;
   const messages = activeSessionId ? (items[activeSessionId] ?? []) : [];
@@ -176,6 +178,27 @@ export function ChatView() {
     }
   }, [activeSessionId, loadCapabilities, loadTranscript]);
 
+  // The stored model may be id-only (old rows) or qualified — normalize to
+  // provider/id for comparison with the catalog so no duplicates appear.
+  const currentQualified = (() => {
+    if (!session?.model) return "";
+    if (session.model.includes("/")) return session.model;
+    const found = models.find((m) => m.id === session.model);
+    return found ? `${found.provider}/${found.id}` : session.model;
+  })();
+
+  const saveTitle = async () => {
+    const trimmed = titleDraft.trim();
+    setEditingTitle(false);
+    if (!trimmed || !activeSessionId || trimmed === usePiControl.getState().sessions[activeSessionId]?.title) return;
+    try {
+      await api.renameSession(activeSessionId, trimmed);
+      usePiControl.getState().renameSession(activeSessionId, trimmed);
+    } catch (e) {
+      setControlError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   const setModel = async (model: string) => {
     if (!activeSessionId) return;
     setControlError(null);
@@ -226,7 +249,30 @@ export function ChatView() {
   return (
     <main className="main">
       <header className="session-header">
-        <span className="session-header-title">{session.title}</span>
+        {editingTitle ? (
+          <input
+            autoFocus
+            className="session-title-input"
+            value={titleDraft}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onBlur={() => void saveTitle()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void saveTitle();
+              if (e.key === "Escape") setEditingTitle(false);
+            }}
+          />
+        ) : (
+          <span
+            className="session-header-title editable-title"
+            title="Click to rename"
+            onClick={() => {
+              setTitleDraft(session.title);
+              setEditingTitle(true);
+            }}
+          >
+            {session.title}
+          </span>
+        )}
         <span className={`status-dot status-${session.status}`} title={session.status} />
         <span className="session-header-meta">{session.status}</span>
         {session.workspaceId && (
@@ -235,12 +281,12 @@ export function ChatView() {
               <select
                 className="session-control"
                 title="Model (provider/model-id)"
-                value={session.model ?? ""}
+                value={currentQualified}
                 onChange={(e) => void setModel(e.target.value)}
               >
-                <option value={session.model ?? ""}>{session.model ?? "default"}</option>
+                <option value={currentQualified}>{currentQualified || "default"}</option>
                 {models
-                  .filter((m) => m.id !== session.model)
+                  .filter((m) => `${m.provider}/${m.id}` !== currentQualified)
                   .map((m) => (
                     <option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>
                       {m.provider}/{m.id}

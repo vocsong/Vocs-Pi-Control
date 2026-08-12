@@ -368,6 +368,7 @@ export interface TaskEventPayload {
 
 export const EVENT_TYPES = {
   sessionCreated: "session.created",
+  sessionUpdated: "session.updated",
   sessionState: "session.state",
   sessionSnapshot: "session.snapshot",
   sessionLease: "session.lease",

@@ -111,6 +111,9 @@ export interface AgentSessionResumeRequest {
 export interface AgentSessionPromptRequest {
   sessionId: string;
   text: string;
+  /** Auto-resume fallback: resume the native session when not live. */
+  nativeSessionPath?: string;
+  nativePiSessionId?: string;
 }
 
 export interface AgentSessionControlRequest {

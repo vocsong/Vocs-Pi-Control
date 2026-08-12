@@ -9,13 +9,14 @@ import { FilesView } from "./components/FilesView";
 import { GitView } from "./components/GitView";
 import { ProcessesView, TerminalView } from "./components/TerminalView";
 import { TasksView } from "./components/TasksView";
+import { LogView } from "./components/LogView";
 import { SettingsView } from "./components/SettingsView";
 import { TraceView } from "./components/TraceView";
 import { CommandPalette, QuickOpen, type CommandItem } from "./components/CommandPalette";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
 import { StatusBar } from "./components/StatusBar";
 
-type Tab = "chat" | "files" | "git" | "terminal" | "processes" | "tasks" | "trace" | "settings";
+type Tab = "chat" | "files" | "git" | "terminal" | "processes" | "tasks" | "trace" | "log" | "settings";
 
 export function App() {
   const connection = usePiControl((s) => s.connection);
@@ -182,6 +183,33 @@ export function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  // Live workspace detection: poll so folders added to the root folder
+  // appear without a manual refresh.
+  useEffect(() => {
+    const load = () => {
+      api
+        .listWorkspaces()
+        .then(({ workspaces }) => {
+          usePiControl.setState({
+            workspaces: Object.fromEntries(workspaces.map((w) => [w.id, w])),
+            workspaceOrder: workspaces.map((w) => w.id),
+          });
+        })
+        .catch(() => undefined);
+      api
+        .listSandboxes()
+        .then(({ sandboxes }) => {
+          usePiControl.setState({
+            sandboxes: Object.fromEntries(sandboxes.map((sb) => [sb.id, sb])),
+            sandboxOrder: sandboxes.map((sb) => sb.id),
+          });
+        })
+        .catch(() => undefined);
+    };
+    const timer = setInterval(load, 15_000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Baseline notification: flash the title when an assistant run finishes.
   useEffect(() => {
     return getRealtime().onEvent((envelope) => {
@@ -258,6 +286,9 @@ export function App() {
             <button className={`tab ${tab === "trace" ? "active" : ""}`} onClick={() => setTab("trace")}>
               Trace
             </button>
+            <button className={`tab ${tab === "log" ? "active" : ""}`} onClick={() => setTab("log")}>
+              Log
+            </button>
             <button className={`tab ${tab === "settings" ? "active" : ""}`} onClick={() => setTab("settings")}>
               Settings
             </button>
@@ -274,6 +305,7 @@ export function App() {
           {tab === "processes" && <ProcessesView />}
           {tab === "tasks" && <TasksView />}
           {tab === "trace" && <TraceView />}
+          {tab === "log" && <LogView />}
           {tab === "settings" && <SettingsView />}
         </div>
       </div>

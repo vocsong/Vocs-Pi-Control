@@ -71,6 +71,8 @@ interface PiControlState {
   requestedFile: string | null;
   /** True while the server replays buffered events after (re)subscribe. */
   replaying: boolean;
+  /** Verbose envelope log (bounded) for troubleshooting (LOG tab). */
+  log: Array<{ seq: number; ts: number; type: string; scope: string; sessionId?: string; payload: unknown }>;
 
   setConnection(connection: PiControlState["connection"]): void;
   setActive(sessionId: string | null): void;
@@ -78,6 +80,7 @@ interface PiControlState {
   setActiveSandbox(sandboxId: string | null): void;
   createSession(): Promise<void>;
   createWorkspaceSession(workspaceId: string): Promise<void>;
+  renameSession(sessionId: string, title: string): Promise<void>;
   createWorkspace(name: string, hostRootPath?: string): Promise<void>;
   createSandbox(name?: string, hostPath?: string): Promise<void>;
   startSandbox(sandboxId: string): Promise<void>;
@@ -88,6 +91,7 @@ interface PiControlState {
   prepareSandbox(): Promise<void>;
   runSelfTest(): Promise<void>;
   setRequestedFile(path: string | null): void;
+  clearLog(): void;
   apply(envelope: EventEnvelope): void;
 }
 
@@ -116,6 +120,7 @@ export const usePiControl = create<PiControlState>((set, get) => ({
   selfTest: null,
   requestedFile: null,
   replaying: false,
+  log: [],
 
   setConnection: (connection) => set({ connection }),
   setActive: (activeSessionId) => set({ activeSessionId }),
@@ -158,6 +163,11 @@ export const usePiControl = create<PiControlState>((set, get) => ({
       throw new Error("Could not start the workspace sandbox.");
     }
     return state.createWorkspaceSession(sandbox.id);
+  },
+
+  renameSession: async (sessionId, title) => {
+    const { session } = await api.renameSession(sessionId, title);
+    set({ sessions: { ...get().sessions, [sessionId]: session } });
   },
 
   createWorkspaceSession: async (workspaceId) => {
@@ -255,10 +265,20 @@ export const usePiControl = create<PiControlState>((set, get) => ({
 
   setRequestedFile: (requestedFile) => set({ requestedFile }),
 
+  clearLog: () => set({ log: [] }),
+
   apply: (envelope) => {
     const state = get();
     const sessionId = envelope.sessionId;
     const items = state.items;
+
+    // Verbose log: every envelope, bounded to the last 2000.
+    set({
+      log: [
+        ...state.log.slice(-1999),
+        { seq: envelope.seq, ts: envelope.timestamp, type: envelope.type, scope: envelope.scope, sessionId, payload: envelope.payload },
+      ],
+    });
     // During replay, buffered entity-created events can resurrect deleted
     // items; the authoritative REST load covers current state instead.
     if (state.replaying) {
@@ -375,6 +395,11 @@ export const usePiControl = create<PiControlState>((set, get) => ({
       case EVENT_TYPES.serverHello: {
         const payload = envelope.payload as { clientId: string };
         set({ clientId: payload.clientId });
+        break;
+      }
+      case EVENT_TYPES.sessionUpdated: {
+        const payload = envelope.payload as { sessionId: string; session: SessionInfo };
+        upsertSession(payload.session);
         break;
       }
       case EVENT_TYPES.sessionState: {

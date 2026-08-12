@@ -21,6 +21,11 @@ export function registerWorkspaceRoutes(app: AppFastify, manager: SandboxManager
     return reply.code(201).send(result);
   });
 
+  // Re-scan the workspace root: every folder becomes a workspace.
+  app.post("/api/workspaces/sync", async () => {
+    return { created: manager.syncWorkspacesFromRoot() };
+  });
+
   // Convenience: start the workspace = ensure its sandbox exists, then start it.
   app.post("/api/workspaces/:workspaceId/start", async (request, reply) => {
     const { workspaceId } = request.params as { workspaceId: string };
