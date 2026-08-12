@@ -62,13 +62,31 @@ export class GitWorktreeService {
     }
 
     // Create the workspace folder + its primary sandbox (mounts the worktree).
-    const { sandbox } = await this.sandbox.createWorkspace({
-      name: input.name,
-      hostRootPath: target,
-      kind: "worktree",
-      gitBranch: branch,
-      sandboxHostPath: target,
-    });
+    let sandbox: { id: string };
+    try {
+      ({ sandbox } = await this.sandbox.createWorkspace({
+        name: input.name,
+        hostRootPath: target,
+        kind: "worktree",
+        gitBranch: branch,
+        sandboxHostPath: target,
+      }));
+    } catch (error) {
+      // Compensation (#14): the git worktree + branch were created before
+      // the workspace; remove them so a retry starts clean.
+      try {
+        await execa("git", ["worktree", "remove", "--force", target], { cwd: repoRoot, reject: false });
+      } catch {
+        // best-effort
+      }
+      try {
+        await execa("git", ["branch", "-D", branch], { cwd: repoRoot, reject: false });
+      } catch {
+        // best-effort
+      }
+      this.logger.warn({ worktreePath: target, error: String(error) }, "worktree creation rolled back");
+      throw error;
+    }
     this.logger.info(
       { sandboxId: sandbox.id, worktreePath: target, branch },
       "worktree sandbox created",

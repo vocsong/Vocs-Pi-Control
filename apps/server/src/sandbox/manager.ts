@@ -232,14 +232,23 @@ export class SandboxManager {
 
     // Auto-create the primary sandbox (the container for this workspace),
     // named after the workspace, then START it — creation == running.
-    const sandbox = await this.createSandbox(record.id, {
-      name: input.name,
-      hostPath: input.sandboxHostPath,
-      kind: input.kind,
-      gitBranch: input.gitBranch,
-      profile: input.profile,
-      securityProfile: input.securityProfile,
-    });
+    let sandbox: Awaited<ReturnType<SandboxManager["createSandbox"]>>;
+    try {
+      sandbox = await this.createSandbox(record.id, {
+        name: input.name,
+        hostPath: input.sandboxHostPath,
+        kind: input.kind,
+        gitBranch: input.gitBranch,
+        profile: input.profile,
+        securityProfile: input.securityProfile,
+      });
+    } catch (error) {
+      // Compensation (#14): one workspace owns one container — a workspace
+      // record must not outlive a failed sandbox creation.
+      this.options.db.delete(schema.projects).where(eq(schema.projects.id, record.id)).run();
+      this.options.logger.warn({ workspaceId: record.id, error: String(error) }, "workspace creation rolled back");
+      throw error;
+    }
     try {
       await this.startSandbox(sandbox.id);
     } catch (error) {
@@ -438,33 +447,46 @@ export class SandboxManager {
     }
 
     const now = nowIso();
-    this.options.db.insert(schema.workspaces).values({
-      id: sandboxId,
-      projectId: workspaceId,
-      machineId: workspace.machineId,
-      name: input.name ?? workspace.name,
-      hostPath,
-      containerWorkspacePath: CONTAINER_WORKSPACE_PATH,
-      kind: input.kind ?? "main",
-      gitBranch: input.gitBranch ?? null,
-      securityProfile: spec.securityProfile,
-      sandboxId: sandbox.id,
-      createdAt: now,
-    }).run();
+    try {
+      this.options.db.insert(schema.workspaces).values({
+        id: sandboxId,
+        projectId: workspaceId,
+        machineId: workspace.machineId,
+        name: input.name ?? workspace.name,
+        hostPath,
+        containerWorkspacePath: CONTAINER_WORKSPACE_PATH,
+        kind: input.kind ?? "main",
+        gitBranch: input.gitBranch ?? null,
+        securityProfile: spec.securityProfile,
+        sandboxId: sandbox.id,
+        createdAt: now,
+      }).run();
 
-    this.options.db.insert(schema.sandboxes).values({
-      id: sandbox.id,
-      workspaceId: sandboxId,
-      runtime: sandbox.runtime,
-      containerName,
-      containerId: sandbox.containerId,
-      imageRef,
-      state: "stopped",
-      securityProfile: spec.securityProfile,
-      configJson: JSON.stringify(spec),
-      createdAt: now,
-      updatedAt: now,
-    }).run();
+      this.options.db.insert(schema.sandboxes).values({
+        id: sandbox.id,
+        workspaceId: sandboxId,
+        runtime: sandbox.runtime,
+        containerName,
+        containerId: sandbox.containerId,
+        imageRef,
+        state: "stopped",
+        securityProfile: spec.securityProfile,
+        configJson: JSON.stringify(spec),
+        createdAt: now,
+        updatedAt: now,
+      }).run();
+    } catch (error) {
+      // Compensation (#14): the container already exists — remove it and
+      // free the dev-port slot so a failed create leaves no residue.
+      this.releaseDevSlot(sandboxId);
+      try {
+        await this.options.runtime.removeWorkspace(sandbox.id);
+      } catch {
+        // best-effort cleanup
+      }
+      this.publishSandboxError(sandboxId, error);
+      throw error;
+    }
 
     const info = await this.sandboxInfo(sandboxId, "stopped");
     this.options.hub.publish({
