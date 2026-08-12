@@ -266,6 +266,7 @@ export class RootlessPodmanRuntime implements SandboxRuntime {
       },
       securityProfile: spec.securityProfile,
       ports: spec.ports,
+      portRanges: spec.portRanges,
       environment: spec.environment,
     });
 
