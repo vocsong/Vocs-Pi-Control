@@ -127,16 +127,24 @@ function WorkspaceRow({ workspace }: { workspace: WorkspaceInfo }) {
         </button>
         <span className="project-actions">
           {running ? (
-            <button className="btn btn-icon btn-icon-stop" title="Stop" disabled={disabled} onClick={() => void act(() => stopWorkspaceFlow(workspace.id))}>
-              ■
+            <button className="btn btn-icon btn-icon-round" title="Stop" disabled={disabled} onClick={() => void act(() => stopWorkspaceFlow(workspace.id))}>
+              {/* 13px square — optically matches the 12px triangle. */}
+              <svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true">
+                <rect x="2" y="2" width="9" height="9" rx="1.5" fill="currentColor" />
+              </svg>
             </button>
           ) : (
-            <button className="btn btn-icon btn-icon-play" title="Start" disabled={disabled} onClick={() => void act(() => startWorkspaceFlow(workspace.id))}>
-              ▶
+            <button className="btn btn-icon btn-icon-round" title="Start" disabled={disabled} onClick={() => void act(() => startWorkspaceFlow(workspace.id))}>
+              <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+                <path d="M3 1.5l7.5 4.5L3 10.5z" fill="currentColor" />
+              </svg>
             </button>
           )}
-          <button className="btn btn-icon" title="Rebuild (stops and starts again)" disabled={disabled || !sandbox} onClick={() => void rebuild()}>
-            ⟳
+          <button className="btn btn-icon btn-icon-round" title="Rebuild (stops and starts again)" disabled={disabled || !sandbox} onClick={() => void rebuild()}>
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+              <path d="M9.8 6A3.8 3.8 0 1 1 8.4 2.9" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+              <path d="M8.6.8v2.4H6.2" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </button>
         </span>
       </div>
