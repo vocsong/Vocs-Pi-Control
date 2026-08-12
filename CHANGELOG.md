@@ -6,6 +6,48 @@ All notable changes to Vocs Pi Control are documented here. Format follows
 
 ## [Unreleased]
 
+### Added — audit remediation batch (issues #1–#20)
+
+- **Browser auth (ADR-0008)**: bootstrap token + HttpOnly SameSite=Strict
+  session cookie; Host/Origin allowlists; security headers; WebSocket
+  session check (close 4401) + per-message/rate limits; REST prompt
+  enforces editing leases when PI_CONTROL_ENFORCE_LEASES=1; login gate UI
+- **Unprivileged sandbox runtime**: containers run as uid 1000 with zero
+  capabilities (--user 1000:1000 --userns keep-id --cap-drop ALL); base
+  image chowns state dirs; security self-test now proves uid + CapEff
+- **Credential boundary**: provider keys stay in the agent process;
+  terminals, exec, and supervised processes get scrubbed child
+  environments; control-plane SQLite file is chmod 0600 on POSIX
+- **Workspace-root hardening**: root sync rejects symlinks/junctions; sandbox
+  mounts are canonicalized before containment checks; FileService walks to
+  the deepest existing ancestor so writes cannot follow a symlinked parent
+- **Dev-port slots**: persisted per-sandbox allocation (dev_port_slots
+  table, unique slot), released on removal, legacy slots claimed at boot,
+  range math centralized
+- **Durable traces**: workspace id resolved from the session record,
+  failures logged, GET /api/sessions/:id/traces + persisted fallback in
+  the Trace tab
+- **CI + lint**: GitHub Actions (typecheck, tests, build, audit, bundle
+  freshness, auth smoke); ESLint 9 + typescript-eslint + react-hooks
+  (zero warnings); bundle split (initial JS 1.29 MB → 265 KB)
+- **Supply chain**: base image pinned by digest, node-pty pinned to 1.1.0,
+  documented update + SBOM process
+
+### Fixed — audit remediation batch (issues #1–#20)
+
+- #6 workspace sync publishes the persisted id; #7 workspace selection
+  keeps the active sandbox in sync; #8 terminal close resolves its
+  command; #9 ports response parsed correctly; #11 thinking default
+  honored; #12 session rename issues one PATCH; #20 malformed WS JSON is
+  rejected without a throw
+- #3 drizzle-orm upgraded to 0.45.2 (GHSA-gpj5-g38j-94v9); prod audit clean
+- #14 lifecycle compensation: failed workspace/sandbox/worktree creation
+  rolls back records, containers, and dev-port slots
+- #15 restart policy documented (stop-on-boot; processes survive
+  disconnects only); #16 API reference rewritten to the registered routes
+  (sandboxes family, auth, traces, tasks)
+
+
 ### Added — recent UX + reliability batch
 
 - Chat auto-recovery: prompting a session whose sandbox is stopped now

@@ -4632,7 +4632,7 @@ var EmbeddedPiDriver = class {
       return mod;
     } catch (error) {
       this.piLoadError = `Pi SDK unavailable: ${error instanceof Error ? error.message : String(error)}`;
-      throw new Error(this.piLoadError);
+      throw new Error(this.piLoadError, { cause: error });
     }
   }
   async create(options = {}) {
@@ -4782,7 +4782,7 @@ var EmbeddedPiDriver = class {
     return mapMessages(managed.session.messages);
   }
   async listModels() {
-    const pi = await this.piModule();
+    await this.piModule();
     if (!this.modelRuntime) return [];
     const available = await this.modelRuntime.getAvailable();
     return available.map((m) => ({ provider: typeof m.provider === "string" ? m.provider : m.provider?.id ?? "unknown", id: m.id ?? "" })).filter((m) => m.id);
@@ -12389,7 +12389,6 @@ var SessionSupervisor = class {
     if (!path11) {
       throw new Error(`Session ${sessionId} is not live and its native session file could not be located`);
     }
-    const tempId = `transcript_${crypto.randomUUID()}`;
     const handle = await this.driver.resume(path11);
     try {
       return await this.driver.readTranscript(handle.id);
