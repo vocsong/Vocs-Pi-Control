@@ -280,11 +280,14 @@ export class SandboxManager {
       const folder = path.join(root, name);
       let stat: fs.Stats;
       try {
-        stat = fs.statSync(folder);
+        // lstat: never follow symlinks/junctions. A link below the root can
+        // point outside it and would later be bind-mounted as an external
+        // target, defeating mount containment (see #2).
+        stat = fs.lstatSync(folder);
       } catch {
         continue;
       }
-      if (!stat.isDirectory()) continue;
+      if (stat.isSymbolicLink() || !stat.isDirectory()) continue;
       const existing = this.options.db
         .select()
         .from(schema.projects)
@@ -361,10 +364,20 @@ export class SandboxManager {
     }
 
     const hostPath = input.hostPath ? fs.realpathSync(input.hostPath) : workspace.hostRootPath;
-    this.assertInsideRoot(hostPath, "Sandbox folder");
-    const stat = fs.statSync(hostPath, { throwIfNoEntry: false });
+    // Always canonicalize the mounted folder (legacy records may hold a
+    // symlink/junction path) and verify canonical containment (#2).
+    let hostPathReal: string;
+    try {
+      hostPathReal = fs.realpathSync(hostPath);
+    } catch (error) {
+      throw new Error(
+        `Cannot resolve sandbox folder for mounting: ${hostPath} (${(error as NodeJS.ErrnoException).message})`,
+      );
+    }
+    this.assertInsideRoot(hostPathReal, "Sandbox folder");
+    const stat = fs.statSync(hostPathReal, { throwIfNoEntry: false });
     if (!stat?.isDirectory()) {
-      throw new Error(`Not a directory: ${hostPath}`);
+      throw new Error(`Not a directory: ${hostPathReal}`);
     }
 
     const sandboxId = newId("sbx");
@@ -687,9 +700,18 @@ export class SandboxManager {
     this.options.logger.info({ profile, imageRef }, "profile image built");
   }
 
-  private assertInsideRoot(realPath: string, what: string): void {
+  private assertInsideRoot(candidatePath: string, what: string): void {
     const root = fs.realpathSync(this.options.rootFolder());
-    if (realPath !== root && !realPath.startsWith(root + path.sep)) {
+    // Canonicalize the candidate too: lexical checks alone cannot tell
+    // whether a symlinked path stays inside the root (#2).
+    let real: string;
+    try {
+      real = fs.realpathSync(candidatePath);
+    } catch {
+      real = candidatePath;
+    }
+    const rel = path.relative(root, real);
+    if (rel.startsWith("..") || path.isAbsolute(rel)) {
       throw new Error(`${what} must be inside the workspace root: ${root}`);
     }
   }

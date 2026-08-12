@@ -178,7 +178,7 @@ export class SessionManager {
 
     const envelope = this.toEnvelope(sessionId, event);
     this.hub.publish(envelope);
-    recordTraceEvent(this.db, envelope);
+    recordTraceEvent(this.db, envelope, this.logger);
 
     // Persist state transitions (not every streaming event — DB writes stay rare).
     if (event.type === "state") {

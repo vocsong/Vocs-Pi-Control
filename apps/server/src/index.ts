@@ -64,7 +64,7 @@ async function main(): Promise<void> {
           .run();
       }
     }
-    recordTraceEvent(db, { scope: "session", sessionId, type: envelope.type, payload: envelope.payload });
+    recordTraceEvent(db, { scope: "session", sessionId, type: envelope.type, payload: envelope.payload }, logger);
     // Event checkpoint for reconnect/replay (plan §26).
     db.insert(schema.eventCheckpoints)
       .values({ scope: "session", scopeId: sessionId, lastSeq: hub.currentSeq(), updatedAt: nowIso() })

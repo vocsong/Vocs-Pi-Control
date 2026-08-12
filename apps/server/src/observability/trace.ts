@@ -5,25 +5,49 @@
  * workspace sessions): user prompts, assistant runs, and tool executions
  * with durations. Rows use natural keys (message/toolCall ids) so
  * start/end pairs merge.
+ *
+ * Privacy policy: traces store metadata plus truncated prompt text and
+ * tool inputs for LOCAL troubleshooting only; transcripts themselves stay
+ * in the native Pi session files and are never duplicated here. Retention
+ * is tied to the control-plane database lifetime.
  */
 
 import { schema, type Db } from "@pi-control/database";
 import { eq } from "drizzle-orm";
 import { nowIso } from "@pi-control/shared";
 import type { EventEnvelopeInit } from "@pi-control/protocol";
+import type { Logger } from "../logger.js";
 
-export function recordTraceEvent(db: Db, envelope: EventEnvelopeInit): void {
+export function recordTraceEvent(db: Db, envelope: EventEnvelopeInit, logger?: Logger): void {
   const sessionId = envelope.sessionId;
   if (!sessionId) return;
+
+  // Event payloads do not carry workspaceId and traces.workspace_id is a
+  // required foreign key into workspaces, so resolve ownership from the
+  // authoritative session record. Server-side (mock) sessions have no
+  // sandbox and are skipped — there is nothing to reference.
+  let workspaceId: string | null = null;
+  try {
+    const row = db
+      .select({ workspaceId: schema.sessions.workspaceId })
+      .from(schema.sessions)
+      .where(eq(schema.sessions.id, sessionId))
+      .get();
+    workspaceId = row?.workspaceId ?? null;
+  } catch (error) {
+    logger?.warn({ error: String(error), sessionId }, "trace: session lookup failed");
+    return;
+  }
+  if (!workspaceId) return;
+
   const payload = envelope.payload as Record<string, unknown>;
-  const workspaceId = (payload.workspaceId as string | undefined) ?? null;
 
   const insert = (id: string, type: string, status: string, metadata?: unknown, startedAt?: string): void => {
     try {
       db.insert(schema.traces)
         .values({
           id,
-          workspaceId: workspaceId ?? "unknown",
+          workspaceId,
           sessionId,
           type,
           startedAt: startedAt ?? nowIso(),
@@ -32,8 +56,10 @@ export function recordTraceEvent(db: Db, envelope: EventEnvelopeInit): void {
         })
         .onConflictDoNothing()
         .run();
-    } catch {
-      // observability must never break the control flow
+    } catch (error) {
+      // Observability must never break the control flow, but failures
+      // must stay observable instead of vanishing silently (#13).
+      logger?.warn({ error: String(error), sessionId, traceType: type }, "trace: insert failed");
     }
   };
 
@@ -43,8 +69,8 @@ export function recordTraceEvent(db: Db, envelope: EventEnvelopeInit): void {
         .set({ finishedAt: nowIso(), status })
         .where(eq(schema.traces.id, id))
         .run();
-    } catch {
-      // ignore
+    } catch (error) {
+      logger?.warn({ error: String(error), sessionId, traceId: id }, "trace: update failed");
     }
   };
 
@@ -81,8 +107,8 @@ export function recordTraceEvent(db: Db, envelope: EventEnvelopeInit): void {
           })
           .where(eq(schema.traces.id, payload.toolCallId as string))
           .run();
-      } catch {
-        // ignore
+      } catch (error) {
+        logger?.warn({ error: String(error), sessionId, traceId: payload.toolCallId }, "trace: tool update failed");
       }
       return;
     }

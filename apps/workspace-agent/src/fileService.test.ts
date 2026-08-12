@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, symlinkSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { FileService } from "./fileService.js";
@@ -37,6 +37,22 @@ describe("FileService containment", () => {
     try {
       symlinkSync(outside, path.join(root, "evil"));
       expect(() => fsx.read("evil/secret.txt")).toThrow(/escapes/);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(process.platform === "win32")("rejects writes that follow a symlinked parent outside the workspace", async () => {
+    // Regression: the final path does not exist yet, so the old code only
+    // checked lexical containment and writeFile/mkdir happily followed the
+    // symlinked parent into an outside-root target (#2).
+    const outside = mkdtempSync(path.join(tmpdir(), "pic-outside-"));
+    try {
+      symlinkSync(outside, path.join(root, "linkdir"), "dir");
+      await expect(fsx.write("linkdir/new-file", "nope")).rejects.toThrow(/escapes/);
+      await expect(fsx.mkdir("linkdir/sub")).rejects.toThrow(/escapes/);
+      expect(existsSync(path.join(outside, "new-file"))).toBe(false);
+      expect(existsSync(path.join(outside, "sub"))).toBe(false);
     } finally {
       rmSync(outside, { recursive: true, force: true });
     }

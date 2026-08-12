@@ -1,8 +1,10 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, mkdirSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { eq } from "drizzle-orm";
 import { openDb, schema, type Db } from "@pi-control/database";
+import { EVENT_TYPES } from "@pi-control/protocol";
 import { MockSandboxRuntime } from "@pi-control/sandbox/mock";
 import { RealtimeHub } from "../realtime/hub.js";
 import { createLogger } from "../logger.js";
@@ -54,6 +56,35 @@ afterEach(() => {
 });
 
 describe("SandboxManager", () => {
+  it("syncs folders from the root and ignores symlinks (#2)", () => {
+    const { db, manager } = makeManager();
+    mkdirSync(path.join(scratch, "real-a"));
+    const outside = mkdtempSync(path.join(tmpdir(), "pic-outside-"));
+    try {
+      if (process.platform !== "win32") symlinkSync(outside, path.join(scratch, "link-b"), "dir");
+      const created = manager.syncWorkspacesFromRoot();
+      expect(created).toBe(1);
+      const rows = db.select().from(schema.projects).all();
+      expect(rows.map((r) => r.name)).toEqual(["real-a"]);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("publishes the same workspace id it persists during sync (#6)", () => {
+    const { db, hub, manager } = makeManager();
+    mkdirSync(path.join(scratch, "folder-a"));
+    const received: Array<Record<string, unknown>> = [];
+    hub.attach({
+      send: (data: string) => received.push(JSON.parse(data) as Record<string, unknown>),
+    } as never);
+    expect(manager.syncWorkspacesFromRoot()).toBe(1);
+    const row = db.select().from(schema.projects).where(eq(schema.projects.name, "folder-a")).get();
+    const event = received.find((e) => e.type === EVENT_TYPES.workspaceCreated);
+    const workspace = (event?.payload as { workspace: { id: string } }).workspace;
+    expect(workspace.id).toBe(row?.id);
+  });
+
   it("creates a project from a real directory", async () => {
     const { manager } = makeManager();
     const project = (await manager.createWorkspace({ name: "app", hostRootPath: scratch })).workspace;

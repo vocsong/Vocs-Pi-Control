@@ -191,6 +191,16 @@ export const api = {
       output?: string;
     }> }>(`/api/sessions/${sessionId}/transcript`),
 
+  sessionTraces: (sessionId: string) =>
+    json<{ traces: Array<{
+      id: string;
+      type: string;
+      status: string;
+      startedAt: string;
+      finishedAt: string | null;
+      metadata?: unknown;
+    }> }>(`/api/sessions/${sessionId}/traces`),
+
   listTasks: (sandboxId: string) =>
     json<{ tasks: import("@pi-control/protocol").TaskInfo[] }>(`/api/sandboxes/${sandboxId}/tasks`),
 

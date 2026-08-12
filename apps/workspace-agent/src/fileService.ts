@@ -31,21 +31,32 @@ export class FileService {
 
   /**
    * Containment check: lexical first (works for paths that do not exist
-   * yet), then real-path (symlink-aware) for existing paths.
+   * yet), then real-path (symlink-aware) for the deepest existing
+   * ancestor. The ancestor walk matters for writes: a symlinked parent
+   * can point outside the root even when the final path does not exist
+   * yet, and mkdir/writeFile would follow it (#2).
    */
   private assertContained(resolved: string): void {
     const outside = (p: string): boolean => p !== this.rootReal && !p.startsWith(this.rootReal + path.sep);
     if (outside(resolved)) {
       throw new Error(`path escapes the workspace: ${resolved}`);
     }
-    try {
-      const real = fs.realpathSync(resolved);
+    let probe = resolved;
+    for (;;) {
+      let real: string;
+      try {
+        real = fs.realpathSync(probe);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        const parent = path.dirname(probe);
+        if (parent === probe) break;
+        probe = parent;
+        continue;
+      }
       if (outside(real)) {
         throw new Error(`path escapes the workspace: ${resolved}`);
       }
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-      // Non-existent target: lexical containment already verified.
+      break;
     }
   }
 

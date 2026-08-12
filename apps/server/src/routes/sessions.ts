@@ -1,7 +1,7 @@
 import type { AppFastify } from "../types.js";
 import { z } from "zod";
 import { schema } from "@pi-control/database";
-import { eq } from "drizzle-orm";
+import { eq, asc } from "drizzle-orm";
 import { EVENT_TYPES, type SessionInfo } from "@pi-control/protocol";
 import { nowIso } from "@pi-control/shared";
 import type { RealtimeHub } from "../realtime/hub.js";
@@ -107,6 +107,35 @@ export function registerSessionRoutes(
   });
 
   /* Phase 9 — Pi management controls */
+
+  app.get("/api/sessions/:sessionId/traces", async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string };
+    const session = sessions.get(sessionId) ?? workspaceSessions.get(sessionId);
+    if (!session) return reply.code(404).send({ error: "not_found" });
+    const rows = db
+      .select()
+      .from(schema.traces)
+      .where(eq(schema.traces.sessionId, sessionId))
+      .orderBy(asc(schema.traces.startedAt))
+      .all();
+    const traces = rows.map((row) => {
+      let metadata: unknown;
+      try {
+        metadata = row.metadataJson ? (JSON.parse(row.metadataJson) as unknown) : undefined;
+      } catch {
+        metadata = undefined;
+      }
+      return {
+        id: row.id,
+        type: row.type,
+        status: row.status,
+        startedAt: row.startedAt,
+        finishedAt: row.finishedAt,
+        metadata,
+      };
+    });
+    return { traces };
+  });
 
   app.get("/api/sessions/:sessionId/capabilities", async (request, reply) => {
     const { sessionId } = request.params as { sessionId: string };
