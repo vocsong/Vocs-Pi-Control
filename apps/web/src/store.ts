@@ -78,6 +78,8 @@ interface PiControlState {
   setActive(sessionId: string | null): void;
   setActiveWorkspace(workspaceId: string | null): void;
   setActiveSandbox(sandboxId: string | null): void;
+  /** Select a workspace and jump to its most recently used session. */
+  selectWorkspace(workspaceId: string): void;
   createSession(): Promise<void>;
   createWorkspaceSession(workspaceId: string): Promise<void>;
   renameSession(sessionId: string, title: string): Promise<void>;
@@ -126,6 +128,17 @@ export const usePiControl = create<PiControlState>((set, get) => ({
   setActive: (activeSessionId) => set({ activeSessionId }),
   setActiveWorkspace: (activeWorkspaceId) => set({ activeWorkspaceId }),
   setActiveSandbox: (activeSandboxId) => set({ activeSandboxId }),
+
+  selectWorkspace: (workspaceId) => {
+    const state = get();
+    set({ activeWorkspaceId: workspaceId });
+    const sandbox = Object.values(state.sandboxes).find((sb) => sb.workspaceId === workspaceId);
+    if (!sandbox) return;
+    const latest = Object.values(state.sessions)
+      .filter((sess) => sess.workspaceId === sandbox.id)
+      .sort((a, b) => (b.lastActivityAt ?? b.createdAt).localeCompare(a.lastActivityAt ?? a.createdAt));
+    if (latest[0]) set({ activeSessionId: latest[0].id });
+  },
 
   createSession: async () => {
     // REAL Pi sessions only — they run inside a sandbox. Prefer the

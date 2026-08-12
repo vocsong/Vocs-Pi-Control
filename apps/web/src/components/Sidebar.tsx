@@ -80,7 +80,7 @@ function AddWorkspaceForm({ onDone }: { onDone: () => void }) {
 function WorkspaceRow({ workspace }: { workspace: WorkspaceInfo }) {
   const sandboxes = usePiControl((s) => s.sandboxes);
   const activeWorkspaceId = usePiControl((s) => s.activeWorkspaceId);
-  const setActiveWorkspace = usePiControl((s) => s.setActiveWorkspace);
+  const selectWorkspace = usePiControl((s) => s.selectWorkspace);
   const startWorkspaceFlow = usePiControl((s) => s.startWorkspaceFlow);
   const stopWorkspaceFlow = usePiControl((s) => s.stopWorkspaceFlow);
   const [busy, setBusy] = useState(false);
@@ -121,7 +121,7 @@ function WorkspaceRow({ workspace }: { workspace: WorkspaceInfo }) {
   return (
     <li className={`workspace-row-item ${workspace.id === activeWorkspaceId ? "active" : ""}`}>
       <div className="project-row">
-        <button className="project-main" onClick={() => setActiveWorkspace(workspace.id)}>
+        <button className="project-main" onClick={() => selectWorkspace(workspace.id)}>
           <span className={`status-dot ${status.cls}`}>{status.dot}</span>
           <span className="project-name">{workspace.name}</span>
         </button>
