@@ -7,7 +7,7 @@
 
 import { command, type ClientCommandType, type EventEnvelope } from "@pi-control/protocol";
 
-export type RealtimeStatus = "connecting" | "open" | "closed";
+export type RealtimeStatus = "connecting" | "open" | "closed" | "unauthorized";
 
 export interface RealtimeHandlers {
   onStatus(status: RealtimeStatus): void;
@@ -92,11 +92,18 @@ export class RealtimeClient {
       this.handleMessage(String(event.data));
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       if (this.ws !== ws) return;
       this.ws = null;
       this.handlers.onStatus("closed");
       this.rejectPending(new Error("socket closed"));
+      // The server closes with 4401 when the session cookie is missing or
+      // expired: stop reconnecting and let the UI show the login gate (#1).
+      if (event.code === 4401) {
+        this.stopped = true;
+        this.handlers.onStatus("unauthorized");
+        return;
+      }
       if (!this.stopped) {
         setTimeout(() => this.open(), this.reconnectDelay);
         this.reconnectDelay = Math.min(this.reconnectDelay * 2, RECONNECT_MAX_MS);

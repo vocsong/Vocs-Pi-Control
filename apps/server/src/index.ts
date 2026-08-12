@@ -24,6 +24,8 @@ import { AgentManager } from "./agents/agentManager.js";
 import { recordTraceEvent } from "./observability/trace.js";
 import { SettingsService } from "./settings/service.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
+import { SessionStore } from "./auth/store.js";
+import { getBootstrapToken } from "./auth/token.js";
 import { buildApp } from "./app.js";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -42,6 +44,21 @@ async function main(): Promise<void> {
 
   const db = openDatabase(config.dbPath);
   ensureLocalMachine(db);
+
+  // Browser auth (ADR-0008, #1): one bootstrap token unlocks the control
+  // plane; sessions are in-memory HttpOnly cookies.
+  const authSessions = new SessionStore();
+  const bootstrapToken = getBootstrapToken(db);
+  const defaultHosts = ["127.0.0.1", "localhost", "[::1]"];
+  const extraHosts = (process.env.PI_CONTROL_ALLOWED_HOSTS ?? "")
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+  const allowedHosts = [...new Set([...defaultHosts, ...extraHosts])];
+  logger.warn(
+    { token: bootstrapToken },
+    "control plane bootstrap token — open http://127.0.0.1:5173 and log in with it",
+  );
 
   const hub = new RealtimeHub(logger);
   const leases = new LeaseManager({
@@ -118,7 +135,25 @@ async function main(): Promise<void> {
   await sandbox.refreshDetection();
   const worktrees = new GitWorktreeService(sandbox, logger);
 
-  const app = await buildApp({ logger, db, hub, sessions, workspaceSessions, sandbox, agents, worktrees, leases, runtimeName: runtime.name });
+  const app = await buildApp({
+    logger,
+    db,
+    hub,
+    sessions,
+    workspaceSessions,
+    sandbox,
+    agents,
+    worktrees,
+    leases,
+    runtimeName: runtime.name,
+    auth: {
+      sessions: authSessions,
+      token: bootstrapToken,
+      allowedHosts,
+      allowedOrigins: allowedHosts,
+      publicPaths: ["/api/health", "/api/auth/status", "/api/auth/login"],
+    },
+  });
   registerSettingsRoutes(app, settings, () => agents.reconnectAll());
 
   try {

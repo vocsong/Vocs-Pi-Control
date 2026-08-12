@@ -29,6 +29,17 @@ async function json<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  authStatus: () => json<{ authenticated: boolean }>("/api/auth/status"),
+
+  login: (token: string) =>
+    json<{ ok: boolean }>("/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token }),
+    }),
+
+  logout: () => json<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
+
   health: () => json<HealthInfo>("/api/health"),
 
   listSessions: () => json<{ sessions: SessionInfo[] }>("/api/sessions"),

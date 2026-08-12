@@ -1968,3 +1968,60 @@ select option {
 .log-session .log-type-name {
   color: var(--ok);
 }
+
+/* Login gate (ADR-0008, issue #1) */
+.login-gate {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+
+.login-card {
+  width: min(380px, 90vw);
+  padding: 28px 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.login-card h1 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--accent);
+}
+
+.login-hint {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.login-input {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.login-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.login-error {
+  color: var(--danger);
+  font-size: 12.5px;
+}
+
+.login-card .btn {
+  align-self: flex-start;
+}

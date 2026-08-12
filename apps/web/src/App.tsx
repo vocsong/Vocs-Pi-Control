@@ -15,11 +15,13 @@ import { TraceView } from "./components/TraceView";
 import { CommandPalette, QuickOpen, type CommandItem } from "./components/CommandPalette";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
 import { StatusBar } from "./components/StatusBar";
+import { LoginGate } from "./components/LoginGate";
 
 type Tab = "chat" | "files" | "git" | "terminal" | "processes" | "tasks" | "trace" | "log" | "settings";
 
 export function App() {
   const connection = usePiControl((s) => s.connection);
+  const authenticated = usePiControl((s) => s.authenticated);
   const activeSessionId = usePiControl((s) => s.activeSessionId);
   const activeWorkspaceId = usePiControl((s) => s.activeWorkspaceId);
   const activeSandboxId = usePiControl((s) => s.activeSandboxId);
@@ -29,12 +31,34 @@ export function App() {
   const [quickOpenOpen, setQuickOpenOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Connect the realtime socket once.
+  // Connect the realtime socket once the session is confirmed; the socket
+  // itself reports 4401 if the cookie expires later (#1).
   useEffect(() => {
+    if (authenticated !== true) return;
     const client = getRealtime();
     client.connect();
     return () => client.disconnect();
+  }, [authenticated]);
+
+  // Auth probe on mount (before any data loads).
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .authStatus()
+      .then(({ authenticated: ok }) => {
+        if (!cancelled) usePiControl.getState().setAuthenticated(ok);
+      })
+      .catch(() => {
+        if (!cancelled) usePiControl.getState().setAuthenticated(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  if (authenticated === false) {
+    return <LoginGate />;
+  }
 
   // Initial load: health + persisted sessions + hierarchy + sandbox status.
   useEffect(() => {

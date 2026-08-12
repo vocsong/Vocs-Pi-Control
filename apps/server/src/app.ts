@@ -20,6 +20,8 @@ import { registerTerminalRoutes } from "./routes/terminals.js";
 import { registerTaskRoutes } from "./routes/tasks.js";
 import { GitWorktreeService } from "./git/worktrees.js";
 import type { AppFastify } from "./types.js";
+import { registerAuthGuards, type AuthDeps } from "./auth/guard.js";
+import { registerAuthRoutes } from "./auth/routes.js";
 
 export interface AppDeps {
   logger: Logger;
@@ -32,6 +34,8 @@ export interface AppDeps {
   worktrees: GitWorktreeService;
   leases: LeaseManager;
   runtimeName: string;
+  /** Control-plane browser auth (ADR-0008). */
+  auth: AuthDeps;
 }
 
 export async function buildApp(deps: AppDeps): Promise<AppFastify> {
@@ -47,8 +51,20 @@ export async function buildApp(deps: AppDeps): Promise<AppFastify> {
   // request object instead of the WebSocket.
   await app.register(fastifyWebsocket);
 
+  // Host/Origin/session guards run before every route (ADR-0008, #1).
+  registerAuthGuards(app, deps.auth);
+  registerAuthRoutes(app, { sessions: deps.auth.sessions, token: deps.auth.token });
+
   registerHealthRoutes(app, deps);
-  registerSessionRoutes(app, deps.sessions, deps.workspaceSessions, deps.db, deps.hub);
+  registerSessionRoutes(
+    app,
+    deps.sessions,
+    deps.workspaceSessions,
+    deps.db,
+    deps.hub,
+    deps.leases,
+    deps.leases.enforcePrompts,
+  );
   registerWorkspaceRoutes(app, deps.sandbox);
   registerSandboxContainerRoutes(app, deps.sandbox, deps.agents);
   registerSandboxRoutes(app, deps.sandbox);
@@ -56,7 +72,7 @@ export async function buildApp(deps: AppDeps): Promise<AppFastify> {
   registerGitRoutes(app, deps.agents, deps.worktrees);
   registerTerminalRoutes(app, deps.agents, deps.db);
   registerTaskRoutes(app, deps.db, deps.hub);
-  registerRealtime(app, deps);
+  registerRealtime(app, { ...deps, sessionStore: deps.auth.sessions });
 
   return app as AppFastify;
 }

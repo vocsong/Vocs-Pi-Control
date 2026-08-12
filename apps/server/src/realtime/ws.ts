@@ -24,6 +24,8 @@ import type { AgentManager } from "../agents/agentManager.js";
 import type { Logger } from "../logger.js";
 import type { AppFastify } from "../types.js";
 import { LeaseManager } from "./leases.js";
+import { parseCookies, SESSION_COOKIE, UNAUTHORIZED_WS_CODE } from "../auth/guard.js";
+import type { SessionStore } from "../auth/store.js";
 
 export interface RealtimeDeps {
   hub: RealtimeHub;
@@ -32,6 +34,8 @@ export interface RealtimeDeps {
   agents: AgentManager;
   leases: LeaseManager;
   logger: Logger;
+  /** Browser session store; the /ws upgrade requires a valid session. */
+  sessionStore: SessionStore;
 }
 
 const commandSchema = z.object({
@@ -39,6 +43,11 @@ const commandSchema = z.object({
   type: z.enum(CLIENT_COMMAND_TYPES),
   payload: z.unknown(),
 });
+
+/** Per-message and per-connection limits (issue #1). */
+const MAX_MESSAGE_BYTES = 128 * 1024;
+const RATE_WINDOW_MS = 10_000;
+const MAX_MESSAGES_PER_WINDOW = 300;
 
 const createSessionSchema = z
   .object({
@@ -73,9 +82,17 @@ const leaseTakeSchema = z
   .strict();
 
 export function registerRealtime(app: AppFastify, deps: RealtimeDeps): void {
-  app.get("/ws", { websocket: true }, (socket) => {
+  app.get("/ws", { websocket: true }, (socket, request) => {
+    // Session check (ADR-0008, #1): close with a dedicated code so the
+    // browser client can stop reconnecting and show the login gate.
+    const cookie = parseCookies(request.headers.cookie ?? "");
+    if (!deps.sessionStore.validate(cookie[SESSION_COOKIE])) {
+      socket.close(UNAUTHORIZED_WS_CODE, "unauthorized");
+      return;
+    }
     const clientId = newId("client");
     const detach = deps.hub.attach(socket as unknown as SocketLike);
+    let recent: number[] = [];
     socket.on("close", () => {
       detach();
       // Release any editing leases held by this client.
@@ -91,6 +108,14 @@ export function registerRealtime(app: AppFastify, deps: RealtimeDeps): void {
     });
     socket.on("error", detach);
     socket.on("message", (raw) => {
+      // Rate limit: bursty or abusive clients are closed (issue #1).
+      const now = Date.now();
+      recent = recent.filter((t) => now - t < RATE_WINDOW_MS);
+      if (recent.length >= MAX_MESSAGES_PER_WINDOW) {
+        socket.close(1008, "rate_limited");
+        return;
+      }
+      recent.push(now);
       void handleMessage(socket as unknown as SocketLike, clientId, String(raw), deps);
     });
 
@@ -104,6 +129,10 @@ export function registerRealtime(app: AppFastify, deps: RealtimeDeps): void {
 }
 
 async function handleMessage(socket: SocketLike, clientId: string, raw: string, deps: RealtimeDeps): Promise<void> {
+  if (raw.length > MAX_MESSAGE_BYTES) {
+    deps.hub.commandError(socket, "?", "message too large");
+    return;
+  }
   let rawMessage: unknown;
   try {
     rawMessage = JSON.parse(raw);

@@ -27,7 +27,8 @@ export interface LeaseManagerOptions {
 export class LeaseManager {
   private readonly leases = new Map<string, Lease>();
   private readonly ttlMs: number;
-  private readonly enforcePrompts: boolean;
+  /** Whether prompt commands are rejected for non-lease-holders. */
+  readonly enforcePrompts: boolean;
 
   constructor(options: LeaseManagerOptions = {}) {
     this.ttlMs = options.ttlMs ?? 30_000;

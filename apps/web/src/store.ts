@@ -44,7 +44,9 @@ export interface SelfTestCheckInfo {
 }
 
 interface PiControlState {
-  connection: "connecting" | "open" | "closed";
+  connection: "connecting" | "open" | "closed" | "unauthorized";
+  /** null = unknown (check in flight); false = login gate shown. */
+  authenticated: boolean | null;
   sessions: Record<string, SessionInfo>;
   sessionOrder: string[];
   items: Record<string, ChatItem[]>;
@@ -80,6 +82,7 @@ interface PiControlState {
   loadSettings(): Promise<void>;
   setShowThinkingByDefault(value: boolean): void;
   setConnection(connection: PiControlState["connection"]): void;
+  setAuthenticated(authenticated: boolean): void;
   setActive(sessionId: string | null): void;
   setActiveWorkspace(workspaceId: string | null): void;
   setActiveSandbox(sandboxId: string | null): void;
@@ -108,6 +111,7 @@ function appendOrder(order: string[], id: string): string[] {
 
 export const usePiControl = create<PiControlState>((set, get) => ({
   connection: "closed",
+  authenticated: null,
   sessions: {},
   sessionOrder: [],
   items: {},
@@ -130,7 +134,13 @@ export const usePiControl = create<PiControlState>((set, get) => ({
   log: [],
   showThinkingByDefault: false,
 
-  setConnection: (connection) => set({ connection }),
+  setConnection: (connection) =>
+    set(
+      connection === "unauthorized"
+        ? { connection, authenticated: false }
+        : { connection },
+    ),
+  setAuthenticated: (authenticated) => set({ authenticated }),
   setActive: (activeSessionId) => set({ activeSessionId }),
   setActiveWorkspace: (activeWorkspaceId) => set({ activeWorkspaceId }),
   setActiveSandbox: (activeSandboxId) => set({ activeSandboxId }),

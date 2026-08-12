@@ -5,8 +5,10 @@ import { eq, asc } from "drizzle-orm";
 import { EVENT_TYPES, type SessionInfo } from "@pi-control/protocol";
 import { nowIso } from "@pi-control/shared";
 import type { RealtimeHub } from "../realtime/hub.js";
+import type { LeaseManager } from "../realtime/leases.js";
 import type { SessionManager } from "../sessions/manager.js";
 import type { WorkspaceSessionManager } from "../sessions/workspaceSessions.js";
+import { parseCookies, SESSION_COOKIE } from "../auth/guard.js";
 
 const createBody = z
   .object({
@@ -24,6 +26,8 @@ export function registerSessionRoutes(
   workspaceSessions: WorkspaceSessionManager,
   db: import("@pi-control/database").Db,
   hub: RealtimeHub,
+  leases?: LeaseManager,
+  enforceLeases = false,
 ): void {
   app.get("/api/sessions", async () => {
     return { sessions: [...sessions.list(), ...workspaceSessions.list()] };
@@ -59,6 +63,18 @@ export function registerSessionRoutes(
   app.post("/api/sessions/:sessionId/prompt", async (request, reply) => {
     const { sessionId } = request.params as { sessionId: string };
     const body = promptBody.parse(request.body);
+    // Editing lease: REST prompts cannot bypass lease enforcement (issue
+    // #1). The browser prompts over the WebSocket, where the holder
+    // identity is the WS client id; REST callers are identified by their
+    // session cookie.
+    if (enforceLeases && leases) {
+      const cookie = parseCookies(request.headers.cookie ?? "");
+      const holder = cookie[SESSION_COOKIE] ?? `rest:${request.ip}`;
+      const { allowed, lease } = leases.mayPrompt(sessionId, holder);
+      if (!allowed) {
+        return reply.code(409).send({ error: `lease_held: ${lease.holder}` });
+      }
+    }
     if (workspaceSessions.owns(sessionId)) {
       await workspaceSessions.prompt(sessionId, body.text);
     } else {
