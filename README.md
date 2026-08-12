@@ -28,18 +28,20 @@ That's it. The script installs dependencies, sets up Podman (asks first), builds
 
 ### 🤖 Real Pi agents, fully managed
 - **Multiple concurrent sessions per workspace** — Lead, Tester, Reviewer: all collaborating on the same shared files, `node_modules`, `.venv`, and Git state
-- **Native Pi session persistence** — sessions survive container rebuilds and can be resumed exactly where they left off
-- **Live streaming** — thinking, tool calls, and answers stream to your browser in real time
+- **Native Pi session persistence** — sessions survive container rebuilds and are resumed automatically when you prompt a stopped session (sandbox auto-starts, transcript restores)
+- **Live streaming** — thinking, tool calls, and answers stream to your browser in real time; completed thinking blocks can stay expanded (Settings → session defaults)
 - **Model & thinking controls** — pick any provider model from Pi's live catalog, tune thinking levels, compact context
+- **Session rename** — click any session title to rename it
 
 ### 💻 A complete agent IDE
 - **Files** — full explorer + CodeMirror editor with create/rename/delete, image & Markdown previews
 - **Git** — status, diff, stage/unstage, commit, branches, history
 - **Git worktrees** — independent agents automatically get their own worktree, workspace, **and container**
 - **Terminals** — persistent PTY tabs that survive browser refreshes
-- **App runner + port exposure** — dev servers inside the sandbox open on your localhost with one click
+- **App runner + port exposure** — dev servers inside the sandbox open on your localhost with one click; every sandbox gets its own non-colliding port range (43100 + slot)
 - **Tasks** — track and assign work across sessions
 - **Trace** — per-session observability timeline with tool timings
+- **Log** — full verbose event stream (seq, type, payload) per session for troubleshooting
 
 ### ⚡ Power user experience
 - Command palette (`Ctrl+K`), quick file open (`Ctrl+P`), transcript search (`Ctrl+F`)
@@ -47,6 +49,7 @@ That's it. The script installs dependencies, sets up Podman (asks first), builds
 - Reconnect hardening — refresh your browser mid-run and nothing is lost
 - PWA baseline — installable, offline-capable shell
 - Seamless sandboxes — every workspace comes with its container ready to start (same name, Node+Python by default); one-click rebuild preserves your workspace and caches
+- Live workspace detection — folders dropped into the root are adopted automatically (15s scan)
 
 ---
 

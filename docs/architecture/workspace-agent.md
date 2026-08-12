@@ -46,7 +46,12 @@ cost once and provides clean supervision (plan §11.2).
 **Commands (server → agent):** `agent.hello` (identity + provider env),
 `agent.ping`, `agent.exec`, `agent.process.spawn|kill|list`,
 `agent.session.create|resume|prompt|steer|followUp|abort|compact|setModel|
-setThinkingLevel|list`, `agent.shutdown`.
+setThinkingLevel|list`, `agent.shutdown`. The prompt/steer/followUp
+commands optionally carry `nativeSessionPath`/`nativePiSessionId`: when the
+control session is not live, `SessionSupervisor.ensureLive()` re-opens the
+native Pi session from that file (by path, or by session-id filename match)
+before dispatching — the auto-recovery path for prompts on stopped
+sandboxes (the server starts the sandbox first).
 
 **Events (agent → server):** `agent.ready`, `agent.health`,
 `agent.ok` (command response), `agent.exec.output|exit`,
@@ -74,6 +79,11 @@ and `require.resolve` cannot resolve ESM-only exports, so the driver walks
 `NODE_PATH` entries + `node_modules` ancestors + the image's fixed
 `/opt/pi-control/node_modules` location and imports the entry file by URL.
 See `packages/pi-driver/src/embedded.ts` and the base image Dockerfile.
+
+Tool arguments: pi's `tool_execution_start` extension event carries the
+arguments as `args` (the SDK does not emit an `input` field) — the driver
+maps `args` (best-effort JSON.parse for string args) into the
+`tool.start` input so the UI shows the real invocation.
 
 ## Relationship to the control server
 

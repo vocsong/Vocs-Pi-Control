@@ -28,6 +28,7 @@ commands (plan §25, §28). Base URL: `http://127.0.0.1:5174` (loopback only).
 | GET | `/api/projects` | list projects |
 | POST | `/api/projects` | `{name, hostRootPath}` — validates the folder |
 | GET | `/api/workspaces` | list all workspaces |
+| POST | `/api/workspaces/sync` | re-scan the root folder and adopt new directories as workspaces (also runs automatically every 15s) |
 | GET | `/api/projects/:projectId/workspaces` | list per project |
 | POST | `/api/projects/:projectId/workspaces` | `{name, hostPath, securityProfile?, imageRef?, resources?}` — creates sandbox + container |
 | GET | `/api/workspaces/:workspaceId` | workspace info |
@@ -44,7 +45,7 @@ commands (plan §25, §28). Base URL: `http://127.0.0.1:5174` (loopback only).
 | GET | `/api/workspaces/:workspaceId/processes` | supervised processes |
 | POST | `/api/workspaces/:workspaceId/processes` | `{name?, command, cwd?, env?}` — spawn detached process |
 | POST | `/api/workspaces/:workspaceId/processes/:processId/kill` | terminate process group |
-| GET | `/api/workspaces/:workspaceId/ports` | listening ports mapped to host loopback URLs (dev range 43100–43119) |
+| GET | `/api/workspaces/:workspaceId/ports` | listening ports mapped to host loopback URLs — per-sandbox dev range (container ports 43100–43119; host side slot-shifted, e.g. `43100`/`43120`/…; see [sandbox.md](docs/architecture/sandbox.md)) |
 
 ### Files (Phase 6)
 
@@ -92,8 +93,9 @@ ownership automatically.
 | POST | `/api/sessions` | create server-side (mock) session |
 | POST | `/api/workspaces/:workspaceId/sessions` | create real Pi session in the sandbox |
 | POST | `/api/workspaces/:workspaceId/sessions/resume` | `{nativeSessionPath}` — resume native pi session |
-| GET | `/api/sessions/:sessionId` | session info |
-| POST | `/api/sessions/:sessionId/prompt` | `{text}` |
+| GET | `/api/sessions/:sessionId` | session info (includes `devHostStart`/`devHostEnd` on sandbox info) |
+| PATCH | `/api/sessions/:sessionId` | `{title}` — rename; broadcasts `session.updated` |
+| POST | `/api/sessions/:sessionId/prompt` | `{text}` — **auto-recovers**: if the sandbox is stopped it is started, and the native Pi session is auto-resumed before prompting |
 | POST | `/api/sessions/:sessionId/abort` | abort current run |
 | DELETE | `/api/sessions/:sessionId` | dispose + delete |
 
@@ -102,10 +104,23 @@ ownership automatically.
 | Method | Path | Description |
 |---|---|---|
 | GET | `/api/sessions/:id/capabilities` | model, thinking, tools, skills, extensions, prompts |
+| GET | `/api/sessions/:id/transcript` | transcript read from the native Pi `.jsonl` (re-opened + disposed; never duplicated) |
 | GET | `/api/workspaces/:id/models` | provider model catalog (auth-filtered) |
 | POST | `/api/sessions/:id/model` | `{model: "provider/id"}` |
 | POST | `/api/sessions/:id/thinking` | `{level: off\|minimal\|low\|medium\|high\|xhigh\|max}` |
 | POST | `/api/sessions/:id/compact` | compact context |
+
+### Settings
+
+Settings live in the SQLite `settings` table; provider keys are applied to
+`process.env` and forwarded to agents at hello.
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/settings` | snapshot: providers (configured flags), session defaults, root folder |
+| PUT | `/api/settings/providers` | `{keys: {DEEPSEEK_API_KEY: "…", …}}` — empty string removes a key; agents reconnect to receive the update |
+| PUT | `/api/settings/defaults` | `{defaultModel?, defaultThinkingLevel?, showThinkingByDefault?}` — session defaults applied to new workspace sessions |
+| PUT | `/api/settings/root` | `{path}` — workspace root folder; every workspace must live inside it; `null` clears |
 
 ## WebSocket — `/ws`
 
@@ -147,10 +162,11 @@ reconnect.
 
 Event types (scope): `session.created` (server), `session.state`,
 `user.message`, `assistant.start|delta|end`, `thinking.start|delta|end`,
-`tool.start|update|end|error`, `model.updated`, `usage.updated`,
-`session.error`, `session.closed` (session), `workspace.created|state|error`
-(workspace), `agent.state|health`, `process.started|output|exited`
-(workspace), `project.created`, `sandbox.status|prepare|selftest` (server).
+`tool.start|update|end|error`, `model.updated`, `session.updated`,
+`usage.updated`, `session.error`, `session.closed` (session),
+`workspace.created|state|error` (workspace), `agent.state|health`,
+`process.started|output|exited` (workspace), `project.created`,
+`sandbox.status|prepare|selftest` (server).
 
 ## Agent protocol (server ↔ workspace agent)
 

@@ -38,12 +38,22 @@ Both kinds share:
    does not re-emit it), then forwards `agent.session.prompt`. Streaming
    driver events come back as `agent.session.event` envelopes and are
    published to browsers with seq numbers.
+   **Auto-recovery**: prompting a session whose sandbox is stopped first
+   starts the sandbox (and waits for the agent), then auto-resumes the
+   native session before sending the prompt — chat on old sessions "just
+   works" after a server/container restart. The prompt/steer/followUp
+   commands carry the native session path/id so the agent can re-open the
+   `.jsonl` when its live session was lost.
 3. **Control** — abort/compact/setModel/setThinkingLevel forward 1:1; model ids use `provider/model` form (e.g. `deepseek/deepseek-v4-pro`).
+   Rename is control-plane only: `PATCH /api/sessions/:id {title}` updates
+   the row and broadcasts `session.updated` (the native session title is
+   left untouched — the native file remains the source of truth).
 4. **Resume** — `POST /api/workspaces/:id/sessions/resume`
    `{nativeSessionPath}` → `agent.session.resume` →
    `createAgentSession({ sessionManager: SessionManager.open(path) })`.
-   Verified: after a workspace restart the resumed session recalled the
-   earlier conversation.
+   The agent locates the file by the stored path, or by matching the
+   session-id filename pattern (`*_<sessionId>.jsonl`). Verified: after a
+   workspace restart the resumed session recalled the earlier conversation.
 5. **Reconnect** — when the control server restarts, it reconnects to each
    running workspace's agent (`restoreAgents`); `agent.ready` carries the
    live process list and session list for re-sync. Live session objects are
@@ -61,7 +71,10 @@ Real-SDK mapping notes (pi 0.84.1, validated live):
 - thinking arrives as `message_update:thinking_*` — mapped to
   `thinking.start|delta|end`;
 - tool calls announce as `message_update:toolcall_*` (ignored) and execute
-  as `tool_execution_start|update|end` — mapped to `tool.*`;
+  as `tool_execution_start|update|end` — mapped to `tool.*`. The tool
+  arguments live on `tool_execution_start.args` (the SDK never sends an
+  `input` field); the driver reads `args` so tool cards show the real
+  invocation instead of `{}`;
 - text arrives as `message_update:text_start|delta|end` — the ONLY thing
   that opens/closes the assistant message in the UI. `message_end` fires
   per segment (a thinking-only message ends before tools run), so it must

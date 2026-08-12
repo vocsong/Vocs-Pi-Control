@@ -3,8 +3,9 @@
 Vocs Pi Control is a local-first web control plane for the Pi coding agent.
 This document summarizes the system; the authoritative specification is
 [`../pi-control-implementation-plan.md`](../pi-control-implementation-plan.md).
-Implemented through Phase 3 (foundation, Podman runtime, workspace agent,
-real Pi integration).
+Implemented through Phase 12 (foundation, Podman runtime, workspace agent,
+real Pi integration, reconnect hardening, hierarchy UI, files, git,
+terminals, Pi management, power UX, environment profiles, tasks/trace).
 
 ## Layering
 
@@ -16,9 +17,11 @@ Pi Control Server        (apps/server — Fastify, SQLite, RealtimeHub)
       │
       ├── database               control-plane metadata (ADR-0009)
       ├── SandboxManager         projects/workspaces/sandboxes lifecycle
+      │                          (per-sandbox dev-port slots, live root sync)
       ├── AgentManager           one AgentClient per workspace (reconnect,
       │                          event bridging, credential forwarding)
-      ├── WorkspaceSessionManager  real Pi sessions (routed to agents)
+      ├── WorkspaceSessionManager  real Pi sessions (routed to agents,
+      │                          prompt auto-recovery, transcript reads)
       └── SessionManager         server-side mock sessions (UI dev/tests)
               │
               ▼  (agent protocol, token-authenticated WebSocket,

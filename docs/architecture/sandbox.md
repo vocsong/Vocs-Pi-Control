@@ -47,6 +47,26 @@ credentials. `restricted` and `trusted` profiles are described in plan §8;
   (`node`, `python`, `node-python`, `universal`, …) are rebuilt via images
   while preserving `/workspace` and persistent volumes.
 
+## Dev-port exposure (per-sandbox slots)
+
+Dev servers started inside a sandbox are reachable on the host loopback
+through a published port range (plan §16.2):
+
+- **Container side** is always `43100–43119` — the agent's port discovery
+  (`/proc/net/tcp`) and the Processes tab guidance use this range.
+- **Host side** shifts by a per-sandbox **slot**: slot `k` publishes
+  `43100 + k·20` … `43119 + k·20` (loopback only, `DEV_PORT_SLOTS = 10`
+  slots → 43100–43299). The slot is allocated at container creation
+  (lowest free across all sandbox rows) and **re-allocated at rebuild** so
+  a rebuild never collides with a running sandbox holding the same range.
+- The slot is persisted in the sandbox record's `configJson.devHostStart`
+  and exposed on `SandboxInfo` as `devHostStart`/`devHostEnd`. The ports
+  API maps each listening container port `p` to
+  `http://127.0.0.1:<devHostStart + (p − 43100)>`.
+- Legacy sandboxes created before slotting default to slot 0 (43100–43119);
+  a rebuild re-slots them automatically. Start legacy sandboxes one at a
+  time until rebuilt — two containers cannot publish the same host range.
+
 ## Lifecycle
 
 `missing → building → stopped → starting → running → stopping → stopped`,

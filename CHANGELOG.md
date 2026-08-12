@@ -6,6 +6,43 @@ All notable changes to Vocs Pi Control are documented here. Format follows
 
 ## [Unreleased]
 
+### Added — recent UX + reliability batch
+
+- Chat auto-recovery: prompting a session whose sandbox is stopped now
+  auto-starts the sandbox, waits for the agent, and auto-resumes the
+  native Pi session before streaming the reply (verified live on a
+  stopped sandbox: prompt → `RECOVERED`)
+- LOG tab: bounded verbose envelope stream (seq, time, type, scope,
+  payload) with session-only filter, type chips, query filter, clear —
+  the last 2,000 events are kept in the browser store
+- Session rename: `PATCH /api/sessions/:id {title}` + `session.updated`
+  event; click-to-edit title in the chat header (Enter saves, Esc cancels)
+- Live workspace detection: the root folder is re-scanned every 15s and
+  new directories are adopted automatically; `POST /api/workspaces/sync`
+  triggers a manual scan
+- Clicking a workspace in the sidebar selects its most recently used
+  session (by `lastActivityAt`)
+- Settings → Session defaults: "Show thinking blocks expanded by default"
+  (persisted via `PUT /api/settings/defaults`); completed thinking blocks
+  stay expanded instead of collapsing
+- Transcript endpoint: `GET /api/sessions/:id/transcript` reads the native
+  Pi `.jsonl` (re-open + dispose; never duplicated)
+- Model picker dedupe: driver stores qualified `provider/id` model refs;
+  legacy id-only rows normalize in the picker
+
+### Fixed
+
+- Tool cards showed `{}` for BASH and every other tool: pi's
+  `tool_execution_start` carries arguments as `args`, but the driver read
+  `event.input` (never sent). Tool cards now show the real invocation
+  (e.g. `{"command": "…"}`)
+- Dev-port publishing: `portRanges` was dropped when building container
+  create args, so advertised `http://127.0.0.1:<port>` URLs were not
+  reachable. Ranges are now actually published AND allocated per-sandbox
+  (container ports 43100–43119; host side slot-shifted 43100/43120/… so
+  concurrent sandboxes never collide). Verified live: demo + tetris
+  running simultaneously, both HTTP 200 on their own mapped URLs
+
 ### Added — Phases 10–12 (power UX, environment profiles, tasks/trace)
 
 - Command palette (Ctrl+K), quick-open filename search (Ctrl+P),
