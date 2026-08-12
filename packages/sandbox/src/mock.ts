@@ -168,6 +168,9 @@ export class MockSandboxRuntime implements SandboxRuntime {
     if (cmd.includes("id -u")) {
       return { exitCode: 0, stdout: "1000\n", stderr: "", truncated: false };
     }
+    if (cmd.includes("grep CapEff")) {
+      return { exitCode: 0, stdout: "0000000000000000\n", stderr: "", truncated: false };
+    }
 
     return {
       exitCode: 0,

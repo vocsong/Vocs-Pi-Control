@@ -31,11 +31,16 @@ V1 implementation is the Podman adapter (Phase 1); tests use
 ## Standard profile (default)
 
 Rootless; no privileged; no Podman/Docker socket; no host network/PID/IPC;
-no host devices; no extra capabilities; `no-new-privileges`; explicit
-workspace bind mount only; private HOME; bounded memory/CPU/PIDs; only
-explicit loopback-forwarded ports; unprivileged container user; no host
-credentials. `restricted` and `trusted` profiles are described in plan §8;
-`trusted` is explicit opt-in only and never auto-promoted.
+no host devices; ZERO capabilities (`--cap-drop ALL`); `no-new-privileges`;
+explicit workspace bind mount only; private HOME; bounded memory/CPU/PIDs;
+only explicit loopback-forwarded ports; unprivileged container user
+(uid 1000, `--user 1000:1000`); no host credentials. Containers are
+created with `--userns keep-id` so uid 1000 maps to the invoking host
+user: bind-mounted workspaces and volumes created by the former root
+runtime user (the same host uid under rootless Podman) stay writable
+without a chown migration (issue #4). `restricted` and `trusted` profiles
+are described in plan §8; `trusted` is explicit opt-in only and never
+auto-promoted.
 
 ## Development environment behavior
 

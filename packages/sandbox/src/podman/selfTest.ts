@@ -103,6 +103,21 @@ export async function runSecuritySelfTest(options: SelfTestOptions): Promise<Sel
       return { ok, detail: ok ? "write+read ok" : result.stderr };
     });
 
+    await check("runs as an unprivileged user", async () => {
+      const result = await options.runtime.exec(sandboxId, { command: ["sh", "-c", "id -u"] });
+      const ok = result.exitCode === 0 && result.stdout.trim() !== "0";
+      return { ok, detail: ok ? `uid ${result.stdout.trim()}` : result.stderr };
+    });
+
+    await check("has no effective capabilities", async () => {
+      const result = await options.runtime.exec(sandboxId, {
+        command: ["sh", "-c", "grep CapEff /proc/self/status | awk '{print $2}'"],
+      });
+      const eff = result.stdout.trim();
+      const ok = result.exitCode === 0 && /^0+$/.test(eff);
+      return { ok, detail: ok ? `CapEff ${eff}` : result.stderr };
+    });
+
     await check("host home directory is absent", async () => {
       const command = `test ! -e '${hostHomeProbe}' && test ! -e '${driveRootProbe}' && echo absent`;
       const result = await options.runtime.exec(sandboxId, { command: ["sh", "-c", command] });

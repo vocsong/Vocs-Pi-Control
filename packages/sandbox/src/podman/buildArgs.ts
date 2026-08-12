@@ -56,6 +56,17 @@ export function buildCreateArgs(options: CreateContainerOptions): string[] {
   // no --device, no socket mounts. no-new-privileges always on.
   args.push("--security-opt", "no-new-privileges");
 
+  // Unprivileged runtime user (issue #4): workloads run as uid 1000 with
+  // NO capabilities. keep-id maps container uid 1000 (and root) to the
+  // invoking host user, so bind-mounted workspaces and legacy volume
+  // files (written by the former root user = the same host uid under
+  // rootless Podman) remain writable without a chown migration.
+  args.push("--user", "1000:1000");
+  args.push("--userns", "keep-id");
+  // The workload needs no capabilities at all: listener ports are above
+  // 1024 and filesystem access flows through the uid mapping above.
+  args.push("--cap-drop", "ALL");
+
   if (options.securityProfile === "restricted") {
     // Read-only root filesystem; workspace + named volumes + tmpfs stay writable.
     args.push("--read-only");

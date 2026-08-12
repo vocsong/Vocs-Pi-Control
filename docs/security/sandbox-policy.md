@@ -29,7 +29,7 @@ host Podman connection/socket.
 
 | Profile | Properties |
 |---|---|
-| `standard` (default) | rootless; no privileged; no sockets; no host namespaces/devices; no extra caps; `no-new-privileges`; explicit workspace bind mount only; private HOME/state; bounded CPU/mem/PIDs; loopback-only forwarded ports; unprivileged container user |
+| `standard` (default) | rootless; no privileged; no sockets; no host namespaces/devices; zero capabilities (`--cap-drop ALL`); `no-new-privileges`; explicit workspace bind mount only; private HOME/state; bounded CPU/mem/PIDs; loopback-only forwarded ports; unprivileged container user (uid 1000) |
 | `restricted` | standard + read-only base FS where compatible; tmpfs for temp; tighter limits; approved packages/extensions only; stricter tool install policy |
 | `trusted` | explicit opt-in; every added capability (mounts/devices/credentials/network) listed in workspace security settings; never auto-promoted after a failed command |
 

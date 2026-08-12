@@ -34,6 +34,10 @@ describe("buildCreateArgs", () => {
     expect(joined).not.toContain("docker.sock");
     expect(joined).toContain("--security-opt no-new-privileges");
     expect(joined).toContain("--label pi-control.managed=true");
+    // Issue #4: unprivileged user, keep-id host mapping, zero capabilities.
+    expect(joined).toContain("--user 1000:1000");
+    expect(joined).toContain("--userns keep-id");
+    expect(joined).toContain("--cap-drop ALL");
   });
 
   it("applies resource limits", () => {

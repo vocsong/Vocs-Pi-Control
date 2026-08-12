@@ -27,6 +27,18 @@ ENV PI_CODING_AGENT_DIR=/state/pi-agent \
     NPM_CONFIG_CACHE=/cache/npm \
     PIP_CACHE_DIR=/cache/pip
 
+# Unprivileged runtime user (issue #4): workloads run as uid 1000 with no
+# capabilities; the control server creates containers with
+# --user 1000:1000 --userns keep-id, which maps this uid to the host user
+# so bind-mounted workspaces stay writable under rootless Podman. The
+# official node image already ships the `node` user at uid 1000 — reuse it
+# (numeric ids are what matter) and keep the /home/pi volume path used by
+# the control plane.
+RUN mkdir -p /home/pi /state /cache /tools /workspace \
+  && chown -R node:node /home/pi /state /cache /tools /workspace
+
+ENV HOME=/home/pi
+
 # Development PATH: workspace-local binaries first, then /tools, then system.
 ENV PATH="/workspace/node_modules/.bin:/workspace/.venv/bin:/tools/bin:/tools/npm/bin:/usr/local/bin:/usr/bin:/bin"
 
@@ -53,6 +65,11 @@ RUN mkdir -p /opt/pi-control \
 ENV NODE_PATH=/opt/pi-control/node_modules
 
 COPY agent/agent.cjs /usr/local/lib/pi-control-workspace-agent.cjs
+
+# NOTE: no USER directive here — profile images layer apt-get steps on top.
+# The unprivileged runtime user is enforced at CONTAINER CREATION via
+# --user 1000:1000 --userns keep-id (buildArgs.ts, issue #4), which also
+# covers ad-hoc images and the security self-test.
 
 ENTRYPOINT ["node", "/usr/local/lib/pi-control-workspace-agent.cjs"]
 CMD []

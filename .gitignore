@@ -12,3 +12,7 @@ coverage/
 .DS_Store
 *.log
 workspaces/
+
+# Windows reserved device names
+NUL
+nul
