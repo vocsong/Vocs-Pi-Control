@@ -9,6 +9,10 @@ coverage/
 .pi-control-data/
 .env
 .env.local
+
+# Pi agent runtime state (contains per-session auth tokens)
+.p6-agent-env.json
+.p6-*.json
 .DS_Store
 *.log
 workspaces/
